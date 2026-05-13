@@ -1,0 +1,1 @@
+"""IoT hardware integration package."""
