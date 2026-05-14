@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -18,7 +19,13 @@ def health() -> dict[str, str]:
 
 @router.get("/status")
 def status(db: Session = Depends(get_db)) -> dict[str, str]:
-    db.execute(text("SELECT 1"))
+    try:
+        db.execute(text("SELECT 1"))
+    except SQLAlchemyError:
+        return {
+            "api": "online",
+            "database": "offline",
+        }
     return {
         "api": "online",
         "database": "online",
@@ -27,6 +34,18 @@ def status(db: Session = Depends(get_db)) -> dict[str, str]:
 
 @router.get("/live-status")
 def live_status(db: Session = Depends(get_db)) -> dict:
+    try:
+        return _database_live_status(db)
+    except SQLAlchemyError:
+        return {
+            "api": "online",
+            "database": "offline",
+            "latest_readings": {},
+            "active_unacknowledged_events": 0,
+        }
+
+
+def _database_live_status(db: Session) -> dict:
     latest_readings = {}
     for sensor_type in SensorType:
         statement = (
@@ -48,6 +67,7 @@ def live_status(db: Session = Depends(get_db)) -> dict:
     )
     return {
         "api": "online",
+        "database": "online",
         "latest_readings": latest_readings,
         "active_unacknowledged_events": active_alerts or 0,
     }

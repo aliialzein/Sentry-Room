@@ -1,0 +1,10 @@
+# Optional dependencies for Raspberry Pi camera, face detection, and enrollment.
+# Install these after the backend runs:
+#   pip install -r requirements-ai.txt
+#
+# On Windows, dlib may require Visual Studio Build Tools or a prebuilt wheel.
+dlib==19.24.6
+face-recognition==1.3.0
+face_recognition_models==0.3.0
+opencv-python==4.10.0.84
+pillow==10.4.0

@@ -39,6 +39,13 @@ uvicorn app.main:app --reload
 ```
 
 Set `DATABASE_URL` in `.env` to your PostgreSQL database before creating tables.
+See `docs/postgresql-setup.md` for the exact local PostgreSQL setup steps.
+
+Install camera/face-recognition dependencies only when you are ready to run enrollment or the Raspberry Pi pipeline:
+
+```bash
+pip install -r requirements-ai.txt
+```
 
 ## Useful Endpoints
 
