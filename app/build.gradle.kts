@@ -5,14 +5,12 @@ plugins {
 
 android {
     namespace = "com.example.sentryroommobile"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.sentryroommobile"
         minSdk = 28
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
