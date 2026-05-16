@@ -9,17 +9,28 @@ from app.schemas.event import DetectionRequest, EventCreate, EventRead
 from app.services.detection import DetectionService
 from app.services.notification import NotificationService
 from app.services.storage import decode_base64_payload, save_bytes_file
-
+from app.services.websocket_manager import manager
 
 router = APIRouter()
 
 
 @router.post("", response_model=EventRead, status_code=status.HTTP_201_CREATED)
-def create_event(payload: EventCreate, db: Session = Depends(get_db)) -> AccessEvent:
+async def create_event(payload: EventCreate, db: Session = Depends(get_db)) -> AccessEvent:
     snapshot_path = payload.snapshot_path
     if payload.snapshot_base64:
-        snapshot_bytes = decode_base64_payload(payload.snapshot_base64)
-        snapshot_path = save_bytes_file(snapshot_bytes, subdir="events", filename_prefix=payload.event_type.value)
+        try:
+            snapshot_bytes = decode_base64_payload(payload.snapshot_base64)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+
+        snapshot_path = save_bytes_file(
+            snapshot_bytes,
+            subdir="events",
+            filename_prefix=payload.event_type.value,
+        )
 
     event = AccessEvent(
         event_type=payload.event_type,
@@ -38,6 +49,19 @@ def create_event(payload: EventCreate, db: Session = Depends(get_db)) -> AccessE
 
     db.commit()
     db.refresh(event)
+    
+    import asyncio
+    asyncio.create_task(
+        manager.broadcast(
+            {
+                "type": event.event_type.value,
+                "severity": event.severity.value,
+                "message": event.message,
+                "event_id": event.id,
+                "snapshot_path": event.snapshot_path,
+            }
+        )
+    )
     return event
 
 
