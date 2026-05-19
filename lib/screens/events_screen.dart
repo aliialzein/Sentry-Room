@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/sentry_provider.dart';
-import '../models/sentry_models.dart';
 
 class EventsScreen extends StatelessWidget {
   const EventsScreen({super.key});
@@ -35,17 +34,23 @@ class EventsScreen extends StatelessWidget {
                   return Card(
                     margin: const EdgeInsets.only(bottom: 12),
                     elevation: 0,
-                    color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest
+                        .withValues(alpha: 0.3),
                     child: ExpansionTile(
                       leading: _getSeverityIcon(event.severity),
                       title: Text(
                         event.message,
                         style: TextStyle(
-                          fontWeight: event.isAcknowledged ? FontWeight.normal : FontWeight.bold,
+                          fontWeight: event.isAcknowledged
+                              ? FontWeight.normal
+                              : FontWeight.bold,
                         ),
                       ),
                       subtitle: Text(
-                        DateFormat('MMM dd, yyyy - HH:mm:ss').format(event.createdAt),
+                        DateFormat('MMM dd, yyyy - HH:mm:ss')
+                            .format(event.createdAt),
                         style: const TextStyle(fontSize: 12),
                       ),
                       children: [
@@ -57,13 +62,16 @@ class EventsScreen extends StatelessWidget {
                               _buildDetailRow('Type', event.eventType),
                               _buildDetailRow('Severity', event.severity),
                               if (event.confidence != null)
-                                _buildDetailRow('Confidence', '${(event.confidence! * 100).toStringAsFixed(1)}%'),
+                                _buildDetailRow('Confidence',
+                                    '${(event.confidence! * 100).toStringAsFixed(1)}%'),
                               if (event.snapshotPath != null)
-                                _buildDetailRow('Snapshot', event.snapshotPath!),
+                                _buildDetailRow(
+                                    'Snapshot', event.snapshotPath!),
                               const SizedBox(height: 16),
                               if (!event.isAcknowledged)
                                 ElevatedButton.icon(
-                                  onPressed: () => sentry.acknowledgeEvent(event.id),
+                                  onPressed: () =>
+                                      sentry.acknowledgeEvent(event.id),
                                   icon: const Icon(Icons.check),
                                   label: const Text('Acknowledge'),
                                   style: ElevatedButton.styleFrom(
@@ -112,7 +120,7 @@ class EventsScreen extends StatelessWidget {
         color = Colors.blue;
     }
     return CircleAvatar(
-      backgroundColor: color.withOpacity(0.1),
+      backgroundColor: color.withValues(alpha: 0.1),
       child: Icon(iconData, color: color, size: 20),
     );
   }

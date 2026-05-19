@@ -6,91 +6,93 @@ import '../providers/sentry_provider.dart';
 import '../models/sentry_models.dart';
 import 'people_screen.dart';
 import 'events_screen.dart';
+import 'user_management_screen.dart';
+import 'camera_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
-  void _handleUnauthorizedAlert(BuildContext context, Event event) {
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierLabel: 'Unauthorized Alert',
-      barrierColor: Colors.black.withOpacity(0.9),
-      transitionDuration: const Duration(milliseconds: 400),
-      pageBuilder: (context, anim1, anim2) {
-        return ScaleTransition(
-          scale: anim1,
-          child: Center(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1D1E33),
-                borderRadius: BorderRadius.circular(32),
-                border: Border.all(color: Colors.red.withOpacity(0.5), width: 2),
-                boxShadow: [
-                  BoxShadow(color: Colors.red.withOpacity(0.3), blurRadius: 20, spreadRadius: 5),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.gpp_maybe_rounded, size: 80, color: Colors.redAccent),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'SECURITY BREACH',
-                      style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.2),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      event.message,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 16, color: Colors.white70),
-                    ),
-                    const SizedBox(height: 32),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(context),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Colors.white24),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            child: const Text('DISMISS', style: TextStyle(color: Colors.white70)),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              if (event.personId != null) {
-                                context.read<SentryProvider>().authorizePerson(event.personId!);
-                              }
-                              context.read<SentryProvider>().acknowledgeEvent(event.id);
-                              Navigator.pop(context);
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.redAccent,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              elevation: 10,
-                            ),
-                            child: const Text('AUTHORIZE', style: TextStyle(fontWeight: FontWeight.bold)),
-                          ),
-                        ),
-                      ],
-                    )
-                  ],
-                ),
-              ),
-            ),
-          ),
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+enum _UnauthorizedAlertResult {
+  acknowledged,
+  authorized,
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final Set<int> _alertedUnauthorizedEventIds = {};
+  int? _activeAlertEventId;
+
+  void _queueUnauthorizedAlert(
+    BuildContext context,
+    SentryProvider sentry,
+    AuthProvider auth,
+  ) {
+    if (_activeAlertEventId != null) return;
+
+    Event? unauthorizedEvent;
+    for (final event in sentry.events) {
+      if (event.eventType == 'unauthorized_entry' &&
+          !event.isAcknowledged &&
+          !_alertedUnauthorizedEventIds.contains(event.id)) {
+        unauthorizedEvent = event;
+        break;
+      }
+    }
+
+    if (unauthorizedEvent == null) return;
+
+    _activeAlertEventId = unauthorizedEvent.id;
+    _alertedUnauthorizedEventIds.add(unauthorizedEvent.id);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
+      final messenger = ScaffoldMessenger.of(context);
+      final result = await showDialog<_UnauthorizedAlertResult>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _UnauthorizedEntryDialog(
+          event: unauthorizedEvent!,
+          isAdmin: auth.isAdmin,
+        ),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        if (_activeAlertEventId == unauthorizedEvent!.id) {
+          _activeAlertEventId = null;
+        }
+      });
+
+      if (result == _UnauthorizedAlertResult.authorized) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Person authorized successfully.')),
         );
-      },
-    );
+      } else if (result == _UnauthorizedAlertResult.acknowledged) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Event acknowledged.')),
+        );
+      }
+    });
+  }
+
+  void _openCamera(BuildContext context) {
+    Navigator.push(
+        context, MaterialPageRoute(builder: (_) => const CameraScreen()));
+  }
+
+  void _openPeople(BuildContext context) {
+    Navigator.push(
+        context, MaterialPageRoute(builder: (_) => const PeopleScreen()));
+  }
+
+  void _openEvents(BuildContext context) {
+    Navigator.push(
+        context, MaterialPageRoute(builder: (_) => const EventsScreen()));
   }
 
   @override
@@ -98,17 +100,7 @@ class HomeScreen extends StatelessWidget {
     final sentry = context.watch<SentryProvider>();
     final auth = context.watch<AuthProvider>();
 
-    // Detect new unauthorized events
-    final unauthorizedEvent = sentry.events.firstWhere(
-      (e) => e.eventType == 'unauthorized_entry' && !e.isAcknowledged,
-      orElse: () => Event(id: -1, eventType: '', severity: '', message: '', isAcknowledged: true, createdAt: DateTime.now()),
-    );
-
-    if (unauthorizedEvent.id != -1) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _handleUnauthorizedAlert(context, unauthorizedEvent);
-      });
-    }
+    _queueUnauthorizedAlert(context, sentry, auth);
 
     return Scaffold(
       body: CustomScrollView(
@@ -120,14 +112,20 @@ class HomeScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildAdminControlPanel(context, sentry),
-                  const SizedBox(height: 28),
-                  Text('Environment Status', style: Theme.of(context).textTheme.titleLarge),
+                  if (auth.isAdmin) ...[
+                    _buildAdminControlPanel(context, sentry),
+                    const SizedBox(height: 28),
+                  ],
+                  Text('Environment Status',
+                      style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 16),
                   _buildLiveStatusGrid(context, sentry),
                   const SizedBox(height: 32),
                   _buildSectionHeader(context, 'Security Log', () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const EventsScreen()));
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const EventsScreen()));
                   }),
                   const SizedBox(height: 16),
                   _buildEventList(context, sentry),
@@ -137,7 +135,7 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      bottomNavigationBar: _buildBottomNav(context),
+      bottomNavigationBar: _buildBottomNav(context, auth),
     );
   }
 
@@ -148,11 +146,15 @@ class HomeScreen extends StatelessWidget {
       pinned: true,
       flexibleSpace: FlexibleSpaceBar(
         titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
-        title: Text('Welcome, ${auth.username}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        title: Text('Welcome, ${auth.fullName ?? auth.username}',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         background: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Theme.of(context).colorScheme.primary.withOpacity(0.2), Colors.transparent],
+              colors: [
+                Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                Colors.transparent
+              ],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
             ),
@@ -161,9 +163,19 @@ class HomeScreen extends StatelessWidget {
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.notifications_none_rounded),
-          onPressed: () {},
+          icon: const Icon(Icons.videocam_rounded),
+          tooltip: 'Live Camera',
+          onPressed: () => _openCamera(context),
         ),
+        if (auth.isAdmin)
+          IconButton(
+            icon: const Icon(Icons.manage_accounts),
+            tooltip: 'User Management',
+            onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const UserManagementScreen())),
+          ),
         IconButton(
           icon: const Icon(Icons.account_circle_outlined),
           onPressed: () => auth.logout(),
@@ -179,7 +191,10 @@ class HomeScreen extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           gradient: LinearGradient(
-            colors: [Colors.white.withOpacity(0.05), Colors.white.withOpacity(0.01)],
+            colors: [
+              Colors.white.withValues(alpha: 0.05),
+              Colors.white.withValues(alpha: 0.01)
+            ],
           ),
         ),
         child: Column(
@@ -189,14 +204,17 @@ class HomeScreen extends StatelessWidget {
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.admin_panel_settings_rounded, color: Colors.blueAccent),
+                    Icon(Icons.admin_panel_settings_rounded,
+                        color: Colors.blueAccent),
                     SizedBox(width: 12),
-                    Text('Global Monitoring', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text('Global Monitoring',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
                   ],
                 ),
                 Switch.adaptive(
                   value: sentry.notifyAllUsers,
-                  activeColor: Colors.blueAccent,
+                  activeThumbColor: Colors.blueAccent,
                   onChanged: (val) => sentry.setNotifyAllUsers(val),
                 ),
               ],
@@ -206,8 +224,11 @@ class HomeScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildQuickAction(context, Icons.lock_outline, 'Lock Room'),
-                _buildQuickAction(context, Icons.emergency_share_outlined, 'Panic Mode', color: Colors.redAccent),
-                _buildQuickAction(context, Icons.refresh_rounded, 'Sync', onTap: sentry.refreshData),
+                _buildQuickAction(
+                    context, Icons.emergency_share_outlined, 'Panic Mode',
+                    color: Colors.redAccent),
+                _buildQuickAction(context, Icons.refresh_rounded, 'Sync',
+                    onTap: sentry.refreshData),
               ],
             )
           ],
@@ -216,17 +237,20 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildQuickAction(BuildContext context, IconData icon, String label, {Color? color, VoidCallback? onTap}) {
+  Widget _buildQuickAction(BuildContext context, IconData icon, String label,
+      {Color? color, VoidCallback? onTap}) {
     return InkWell(
       onTap: onTap ?? () {},
       child: Column(
         children: [
           CircleAvatar(
-            backgroundColor: (color ?? Colors.blueAccent).withOpacity(0.1),
+            backgroundColor:
+                (color ?? Colors.blueAccent).withValues(alpha: 0.1),
             child: Icon(icon, color: color ?? Colors.blueAccent, size: 20),
           ),
           const SizedBox(height: 8),
-          Text(label, style: const TextStyle(fontSize: 11, color: Colors.white54)),
+          Text(label,
+              style: const TextStyle(fontSize: 11, color: Colors.white54)),
         ],
       ),
     );
@@ -234,6 +258,8 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildLiveStatusGrid(BuildContext context, SentryProvider sentry) {
     final readings = sentry.liveStatus['latest_readings'] as Map? ?? {};
+    final env = readings['temperature_humidity'] as Map? ?? {};
+    final distance = readings['distance'] as Map? ?? {};
 
     return GridView.count(
       crossAxisCount: 2,
@@ -243,15 +269,41 @@ class HomeScreen extends StatelessWidget {
       mainAxisSpacing: 16,
       childAspectRatio: 1.4,
       children: [
-        _buildStatusCard(context, 'Temperature', readings['temperature_c']?.toString() ?? '--', '°C', Icons.thermostat_rounded, Colors.orangeAccent),
-        _buildStatusCard(context, 'Humidity', readings['humidity_percent']?.toString() ?? '--', '%', Icons.water_drop_rounded, Colors.cyanAccent),
-        _buildStatusCard(context, 'Security Status', sentry.liveStatus['active_unacknowledged_events']?.toString() ?? '0', 'Alerts', Icons.gpp_maybe_rounded, Colors.redAccent),
-        _buildStatusCard(context, 'Room Occupancy', 'Detected', 'Live', Icons.people_outline_rounded, Colors.greenAccent),
+        _buildStatusCard(
+            context,
+            'Temperature',
+            env['temperature_c']?.toString() ?? '--',
+            '°C',
+            Icons.thermostat_rounded,
+            Colors.orangeAccent),
+        _buildStatusCard(
+            context,
+            'Humidity',
+            env['humidity_percent']?.toString() ?? '--',
+            '%',
+            Icons.water_drop_rounded,
+            Colors.cyanAccent),
+        _buildStatusCard(
+            context,
+            'Security Status',
+            sentry.liveStatus['active_unacknowledged_events']?.toString() ??
+                '0',
+            'Alerts',
+            Icons.gpp_maybe_rounded,
+            Colors.redAccent),
+        _buildStatusCard(
+            context,
+            'Room Range',
+            distance['distance_cm']?.toString() ?? '--',
+            'cm',
+            Icons.sensors_rounded,
+            Colors.greenAccent),
       ],
     );
   }
 
-  Widget _buildStatusCard(BuildContext context, String title, String value, String unit, IconData icon, Color color) {
+  Widget _buildStatusCard(BuildContext context, String title, String value,
+      String unit, IconData icon, Color color) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -264,16 +316,25 @@ class HomeScreen extends StatelessWidget {
               children: [
                 Icon(icon, color: color, size: 24),
                 Container(
-                  width: 8, height: 8,
-                  decoration: BoxDecoration(shape: BoxShape.circle, color: color.withOpacity(0.3)),
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: color.withValues(alpha: 0.3)),
                 )
               ],
             ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-                Text('$title ($unit)', style: const TextStyle(fontSize: 10, color: Colors.white38, fontWeight: FontWeight.bold)),
+                Text(value,
+                    style: const TextStyle(
+                        fontSize: 22, fontWeight: FontWeight.w900)),
+                Text('$title ($unit)',
+                    style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.white38,
+                        fontWeight: FontWeight.bold)),
               ],
             ),
           ],
@@ -282,19 +343,26 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionHeader(BuildContext context, String title, VoidCallback onTap) {
+  Widget _buildSectionHeader(
+      BuildContext context, String title, VoidCallback onTap) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(title, style: Theme.of(context).textTheme.titleLarge),
-        TextButton(onPressed: onTap, child: const Text('View All', style: TextStyle(color: Colors.blueAccent))),
+        TextButton(
+            onPressed: onTap,
+            child: const Text('View All',
+                style: TextStyle(color: Colors.blueAccent))),
       ],
     );
   }
 
   Widget _buildEventList(BuildContext context, SentryProvider sentry) {
     if (sentry.events.isEmpty) {
-      return const Center(child: Padding(padding: EdgeInsets.all(40), child: Text('No recent activity recorded.')));
+      return const Center(
+          child: Padding(
+              padding: EdgeInsets.all(40),
+              child: Text('No recent activity recorded.')));
     }
     return ListView.builder(
       shrinkWrap: true,
@@ -317,13 +385,18 @@ class HomeScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(event.message, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                    Text(DateFormat('HH:mm').format(event.createdAt), style: const TextStyle(fontSize: 12, color: Colors.white38)),
+                    Text(event.message,
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600)),
+                    Text(DateFormat('HH:mm').format(event.createdAt),
+                        style: const TextStyle(
+                            fontSize: 12, color: Colors.white38)),
                   ],
                 ),
               ),
               if (!event.isAcknowledged)
-                const CircleAvatar(radius: 4, backgroundColor: Colors.blueAccent),
+                const CircleAvatar(
+                    radius: 4, backgroundColor: Colors.blueAccent),
             ],
           ),
         );
@@ -345,28 +418,266 @@ class HomeScreen extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12)),
       child: Icon(icon, color: color, size: 20),
     );
   }
 
-  Widget _buildBottomNav(BuildContext context) {
+  Widget _buildBottomNav(BuildContext context, AuthProvider auth) {
     return BottomNavigationBar(
       backgroundColor: const Color(0xFF0A0E21),
       selectedItemColor: Colors.blueAccent,
       unselectedItemColor: Colors.white24,
       type: BottomNavigationBarType.fixed,
       currentIndex: 0,
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded), label: 'Monitor'),
-        BottomNavigationBarItem(icon: Icon(Icons.people_alt_rounded), label: 'People'),
-        BottomNavigationBarItem(icon: Icon(Icons.history_rounded), label: 'Events'),
-        BottomNavigationBarItem(icon: Icon(Icons.settings_suggest_rounded), label: 'Settings'),
+      items: [
+        const BottomNavigationBarItem(
+            icon: Icon(Icons.grid_view_rounded), label: 'Monitor'),
+        const BottomNavigationBarItem(
+            icon: Icon(Icons.videocam_rounded), label: 'Camera'),
+        if (auth.isAdmin)
+          const BottomNavigationBarItem(
+              icon: Icon(Icons.people_alt_rounded), label: 'Access'),
+        const BottomNavigationBarItem(
+            icon: Icon(Icons.history_rounded), label: 'Events'),
+        const BottomNavigationBarItem(
+            icon: Icon(Icons.settings_suggest_rounded), label: 'Settings'),
       ],
       onTap: (index) {
-        if (index == 1) Navigator.push(context, MaterialPageRoute(builder: (_) => const PeopleScreen()));
-        if (index == 2) Navigator.push(context, MaterialPageRoute(builder: (_) => const EventsScreen()));
+        if (index == 0) return;
+        if (index == 1) {
+          _openCamera(context);
+          return;
+        }
+
+        if (auth.isAdmin) {
+          if (index == 2) _openPeople(context);
+          if (index == 3) _openEvents(context);
+        } else {
+          if (index == 2) _openEvents(context);
+        }
       },
     );
+  }
+}
+
+class _UnauthorizedEntryDialog extends StatefulWidget {
+  final Event event;
+  final bool isAdmin;
+
+  const _UnauthorizedEntryDialog({
+    required this.event,
+    required this.isAdmin,
+  });
+
+  @override
+  State<_UnauthorizedEntryDialog> createState() =>
+      _UnauthorizedEntryDialogState();
+}
+
+class _UnauthorizedEntryDialogState extends State<_UnauthorizedEntryDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _fullNameController = TextEditingController();
+  final _roleController = TextEditingController();
+  final _notesController = TextEditingController();
+  bool _showAuthorizeForm = false;
+  bool _isSubmitting = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _roleController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _acknowledgeOnly() async {
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+
+    final sentry = context.read<SentryProvider>();
+    final success = await sentry.acknowledgeEvent(widget.event.id);
+
+    if (!mounted) return;
+
+    if (success) {
+      Navigator.of(context).pop(_UnauthorizedAlertResult.acknowledged);
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = false;
+      _errorMessage = sentry.lastActionError ??
+          'Failed to acknowledge event. Please try again.';
+    });
+  }
+
+  Future<void> _authorizePerson() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+
+    final sentry = context.read<SentryProvider>();
+    final success = await sentry.authorizePersonFromEvent(
+      eventId: widget.event.id,
+      fullName: _fullNameController.text.trim(),
+      role: _roleController.text.trim(),
+      notes: _emptyToNull(_notesController.text),
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      Navigator.of(context).pop(_UnauthorizedAlertResult.authorized);
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = false;
+      _errorMessage = sentry.lastActionError ??
+          'Failed to authorize person. Please try again.';
+    });
+  }
+
+  String? _emptyToNull(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      icon: const Icon(Icons.gpp_maybe_rounded,
+          color: Colors.redAccent, size: 48),
+      title: const Text(
+        'Unauthorized Entry',
+        textAlign: TextAlign.center,
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.event.message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70),
+            ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 16),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.redAccent),
+              ),
+            ],
+            if (_showAuthorizeForm) ...[
+              const SizedBox(height: 20),
+              Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: _fullNameController,
+                      enabled: !_isSubmitting,
+                      decoration: const InputDecoration(
+                        labelText: 'Full Name',
+                        prefixIcon: Icon(Icons.badge_outlined),
+                      ),
+                      textInputAction: TextInputAction.next,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Enter full name';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _roleController,
+                      enabled: !_isSubmitting,
+                      decoration: const InputDecoration(
+                        labelText: 'Role',
+                        prefixIcon: Icon(Icons.work_outline_rounded),
+                      ),
+                      textInputAction: TextInputAction.next,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Enter role';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _notesController,
+                      enabled: !_isSubmitting,
+                      decoration: const InputDecoration(
+                        labelText: 'Notes',
+                        prefixIcon: Icon(Icons.notes_rounded),
+                      ),
+                      minLines: 2,
+                      maxLines: 3,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: _buildActions(),
+    );
+  }
+
+  List<Widget> _buildActions() {
+    if (_isSubmitting) {
+      return const [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      ];
+    }
+
+    if (_showAuthorizeForm) {
+      return [
+        TextButton(
+          onPressed: () => setState(() => _showAuthorizeForm = false),
+          child: const Text('Back'),
+        ),
+        ElevatedButton.icon(
+          onPressed: _authorizePerson,
+          icon: const Icon(Icons.verified_user_rounded),
+          label: const Text('Authorize'),
+        ),
+      ];
+    }
+
+    return [
+      TextButton(
+        onPressed: _acknowledgeOnly,
+        child: const Text('Acknowledge Only'),
+      ),
+      if (widget.isAdmin)
+        ElevatedButton.icon(
+          onPressed: () => setState(() => _showAuthorizeForm = true),
+          icon: const Icon(Icons.person_add_alt_1_rounded),
+          label: const Text('Authorize This Person'),
+        ),
+    ];
   }
 }

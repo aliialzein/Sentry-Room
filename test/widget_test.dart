@@ -20,7 +20,7 @@ void main() {
     );
 
     // Verify that the login screen (AuthScreen) is shown initially.
-    expect(find.text('Sentry Room'), findsAtLeastNWidgets(1));
+    expect(find.text('Sentry Room'), findsWidgets);
     expect(find.text('Login'), findsOneWidget);
     
     // Verify that we have input fields for username and password.

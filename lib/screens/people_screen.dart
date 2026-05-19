@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/sentry_provider.dart';
-import '../models/sentry_models.dart';
 
 class PeopleScreen extends StatelessWidget {
   const PeopleScreen({super.key});
@@ -12,7 +11,7 @@ class PeopleScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Access Management'),
+        title: const Text('Recognized Persons'),
       ),
       body: RefreshIndicator(
         onRefresh: sentry.refreshData,
@@ -28,24 +27,39 @@ class PeopleScreen extends StatelessWidget {
                     child: ListTile(
                       leading: CircleAvatar(
                         backgroundColor: person.isAuthorized
-                            ? Colors.green.withOpacity(0.1)
-                            : Colors.red.withOpacity(0.1),
+                            ? Colors.green.withValues(alpha: 0.1)
+                            : Colors.red.withValues(alpha: 0.1),
                         child: Icon(
-                          person.isAuthorized ? Icons.verified : Icons.person_off,
-                          color: person.isAuthorized ? Colors.green : Colors.red,
+                          person.isAuthorized
+                              ? Icons.verified
+                              : Icons.person_off,
+                          color:
+                              person.isAuthorized ? Colors.green : Colors.red,
                         ),
                       ),
-                      title: Text(person.fullName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      title: Text(person.fullName,
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Text(person.role ?? 'Visitor'),
-                      trailing: PopupMenuButton(
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (value) {
+                          if (value == 'toggle') {
+                            context
+                                .read<SentryProvider>()
+                                .updatePersonAuthorization(
+                                  person.id,
+                                  !person.isAuthorized,
+                                );
+                          }
+                        },
                         itemBuilder: (context) => [
                           PopupMenuItem(
-                            child: Text(person.isAuthorized ? 'Revoke Access' : 'Grant Access'),
-                            onTap: () {
-                              // Logic to toggle authorization
-                            },
+                            value: 'toggle',
+                            child: Text(person.isAuthorized
+                                ? 'Revoke Access'
+                                : 'Grant Access'),
                           ),
                           const PopupMenuItem(
+                            value: 'details',
                             child: Text('View Details'),
                           ),
                         ],
@@ -63,21 +77,45 @@ class PeopleScreen extends StatelessWidget {
   }
 
   void _showAddPersonDialog(BuildContext context) {
-    // Dialog to add a new person (placeholder)
+    final nameController = TextEditingController();
+    final roleController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Add Authorized Person'),
-        content: const Column(
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(decoration: InputDecoration(labelText: 'Full Name')),
-            TextField(decoration: InputDecoration(labelText: 'Role')),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Full Name'),
+            ),
+            TextField(
+              controller: roleController,
+              decoration: const InputDecoration(
+                  labelText: 'Role (e.g. Employee, Admin)'),
+            ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Save')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              final role = roleController.text.trim();
+              if (name.isNotEmpty) {
+                context
+                    .read<SentryProvider>()
+                    .createPerson(name, role.isEmpty ? null : role);
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Save'),
+          ),
         ],
       ),
     );

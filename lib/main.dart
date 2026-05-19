@@ -51,7 +51,7 @@ class SentryRoomApp extends StatelessWidget {
           centerTitle: true,
         ),
         textTheme: const TextTheme(
-          headlineMedium: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          headlineMedium: TextStyle(fontWeight: FontWeight.w900, color: Colors.white),
           titleLarge: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
       ),
