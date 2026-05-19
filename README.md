@@ -18,6 +18,7 @@ Sentry Room is an AI-based restricted-room security system. A Raspberry Pi reads
 - Authorized entry: camera image -> face encoding -> authorized person match -> silent `authorized_entry` event.
 - Unauthorized entry: camera image -> unknown face -> saved snapshot -> `unauthorized_entry` event -> pending app/email alert.
 - Enrollment: mobile upload or Pi camera capture -> one face encoding -> `persons.face_encoding` in PostgreSQL.
+- App users: mobile login/register accounts are stored separately in `users`; new users default to `viewer`, not admin.
 - Sensor logging: Pi posts motion, distance, temperature, and humidity readings to `/api/sensor-readings`.
 - Evidence browser: mobile app reads `/api/events` and uses `snapshot_path` to locate saved evidence.
 
@@ -52,12 +53,21 @@ pip install -r requirements-ai.txt
 - `GET /api/health`
 - `GET /api/status`
 - `GET /api/live-status`
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/users`
+- `PATCH /api/users/{user_id}/role`
+- `PATCH /api/users/{user_id}/status`
+- `GET /api/camera/snapshot`
+- `GET /api/camera/stream`
 - `POST /api/persons`
 - `POST /api/persons/enroll-from-image`
 - `POST /api/events/detection`
+- `POST /api/events/{event_id}/authorize-person`
 - `GET /api/events`
 - `PATCH /api/events/{event_id}/acknowledge`
 - `POST /api/sensor-readings`
 - `GET /api/sensor-readings/recent`
 
 See `docs/scenarios.md` for the complete project scenario list.
+See `docs/alerts-camera-mobile.md` for email alerts, camera stream, and mobile admin authorization.

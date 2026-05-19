@@ -21,6 +21,12 @@ class DetectionRequest(BaseModel):
     sensor_payload: dict | None = None
 
 
+class AuthorizeEventPersonRequest(BaseModel):
+    full_name: str = Field(..., min_length=1, max_length=120)
+    role: str | None = Field(default=None, max_length=80)
+    notes: str | None = None
+
+
 class EventRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

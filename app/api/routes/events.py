@@ -5,7 +5,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.models.enums import EventSeverity, EventType
 from app.models.event import AccessEvent
-from app.schemas.event import DetectionRequest, EventCreate, EventRead
+from app.models.person import Person
+from app.schemas.event import AuthorizeEventPersonRequest, DetectionRequest, EventCreate, EventRead
+from app.schemas.person import PersonRead
 from app.services.detection import DetectionService
 from app.services.notification import NotificationService
 from app.services.storage import decode_base64_payload, save_bytes_file
@@ -100,6 +102,43 @@ def acknowledge_event(event_id: int, db: Session = Depends(get_db)) -> AccessEve
     db.commit()
     db.refresh(event)
     return event
+
+
+@router.post("/{event_id}/authorize-person", response_model=PersonRead, status_code=status.HTTP_201_CREATED)
+def authorize_person_from_event(
+    event_id: int,
+    payload: AuthorizeEventPersonRequest,
+    db: Session = Depends(get_db),
+) -> Person:
+    event = db.get(AccessEvent, event_id)
+    if event is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+    if event.event_type != EventType.UNAUTHORIZED_ENTRY:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only unauthorized events can be authorized")
+
+    sensor_payload = event.sensor_payload or {}
+    unknown_encodings = sensor_payload.get("unknown_face_encodings") or []
+    if not unknown_encodings:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Event has no captured unknown face encoding")
+
+    person = Person(
+        full_name=payload.full_name,
+        role=payload.role,
+        is_authorized=True,
+        face_encoding=unknown_encodings[0],
+        image_path=event.snapshot_path,
+        notes=payload.notes or f"Authorized from event {event.id}.",
+    )
+    db.add(person)
+    db.flush()
+
+    event.person_id = person.id
+    event.is_acknowledged = True
+    event.message = f"{event.message} Authorized as {person.full_name}."
+
+    db.commit()
+    db.refresh(person)
+    return person
 
 
 @router.post("/detection", response_model=EventRead, status_code=status.HTTP_201_CREATED)

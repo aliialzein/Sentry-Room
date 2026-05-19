@@ -30,12 +30,19 @@ class FaceMatch:
 
 class FaceRecognitionService:
     def __init__(self, tolerance: float | None = None) -> None:
-        self.tolerance = tolerance if tolerance is not None else get_settings().face_match_tolerance
+        settings = get_settings()
+        self.tolerance = tolerance if tolerance is not None else settings.face_match_tolerance
+        self.detection_model = settings.face_detection_model
+        self.detection_upsample = settings.face_detection_upsample
 
     def detect_faces(self, image_bytes: bytes) -> list[DetectedFace]:
         face_recognition = self._face_recognition()
         image = face_recognition.load_image_file(BytesIO(image_bytes))
-        locations = face_recognition.face_locations(image)
+        locations = face_recognition.face_locations(
+            image,
+            number_of_times_to_upsample=self.detection_upsample,
+            model=self.detection_model,
+        )
         encodings = face_recognition.face_encodings(image, locations)
         return [
             DetectedFace(encoding=encoding.tolist(), location=tuple(location))
@@ -56,8 +63,27 @@ class FaceRecognitionService:
 
         face_recognition = self._face_recognition()
         numpy = self._numpy()
-        known_encodings = [known_face.encoding for known_face in known_faces]
-        distances = face_recognition.face_distance(known_encodings, encoding)
+
+        valid_known_faces = []
+        valid_encodings = []
+        for known_face in known_faces:
+            try:
+                known_encoding = numpy.asarray(known_face.encoding, dtype=float)
+            except (TypeError, ValueError):
+                continue
+            if known_encoding.shape == (128,):
+                valid_known_faces.append(known_face)
+                valid_encodings.append(known_encoding)
+
+        if not valid_known_faces:
+            return None
+
+        face_encoding = numpy.asarray(encoding, dtype=float)
+        if face_encoding.shape != (128,):
+            return None
+
+        known_encodings = numpy.vstack(valid_encodings)
+        distances = face_recognition.face_distance(known_encodings, face_encoding)
         best_index = int(numpy.argmin(distances))
         best_distance = float(distances[best_index])
 
@@ -65,7 +91,7 @@ class FaceRecognitionService:
             return None
 
         confidence = max(0.0, min(1.0, 1.0 - best_distance))
-        known_face = known_faces[best_index]
+        known_face = valid_known_faces[best_index]
         return FaceMatch(
             name=known_face.name,
             person_id=known_face.person_id,

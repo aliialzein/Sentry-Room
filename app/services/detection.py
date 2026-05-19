@@ -21,6 +21,10 @@ class DetectionService:
     ) -> AccessEvent:
         snapshot_path = save_bytes_file(image_bytes, subdir="events", filename_prefix="detection")
         detected_faces = self.recognizer.detect_faces(image_bytes)
+        base_sensor_payload = {
+            **(sensor_payload or {}),
+            "detected_face_count": len(detected_faces),
+        }
 
         if not detected_faces:
             event = AccessEvent(
@@ -28,7 +32,7 @@ class DetectionService:
                 severity=EventSeverity.WARNING,
                 message="Motion or image captured, but no face was detected.",
                 snapshot_path=snapshot_path,
-                sensor_payload=sensor_payload,
+                sensor_payload=base_sensor_payload,
             )
             db.add(event)
             db.flush()
@@ -37,22 +41,26 @@ class DetectionService:
 
         known_faces = self._known_authorized_faces(db)
         matches = []
-        unknown_count = 0
+        unknown_encodings = []
 
         for detected_face in detected_faces:
             match = self.recognizer.match_encoding(known_faces, detected_face.encoding)
             if match is None:
-                unknown_count += 1
+                unknown_encodings.append(detected_face.encoding)
             else:
                 matches.append(match)
 
-        if unknown_count:
+        if unknown_encodings:
             event = AccessEvent(
                 event_type=EventType.UNAUTHORIZED_ENTRY,
                 severity=EventSeverity.CRITICAL,
-                message=f"Unauthorized person detected ({unknown_count} unknown face(s)).",
+                message=f"Unauthorized person detected ({len(unknown_encodings)} unknown face(s)).",
                 snapshot_path=snapshot_path,
-                sensor_payload=sensor_payload,
+                sensor_payload={
+                    **base_sensor_payload,
+                    "unknown_face_encodings": unknown_encodings,
+                    "known_match_count": len(matches),
+                },
             )
             db.add(event)
             db.flush()
@@ -68,7 +76,11 @@ class DetectionService:
             person_id=primary_match.person_id,
             confidence=primary_match.confidence,
             snapshot_path=snapshot_path,
-            sensor_payload=sensor_payload,
+            sensor_payload={
+                **base_sensor_payload,
+                "known_match_count": len(matches),
+                "matched_person_ids": [match.person_id for match in matches if match.person_id is not None],
+            },
         )
         db.add(event)
         db.flush()
@@ -76,9 +88,16 @@ class DetectionService:
 
     @staticmethod
     def _known_authorized_faces(db: Session) -> list[KnownFace]:
-        statement = select(Person).where(Person.is_authorized.is_(True), Person.face_encoding.is_not(None))
+        statement = select(Person).where(Person.is_authorized.is_(True))
         people = db.scalars(statement)
         return [
             KnownFace(name=person.full_name, encoding=person.face_encoding or [], person_id=person.id)
             for person in people
+            if _is_valid_face_encoding(person.face_encoding)
         ]
+
+
+def _is_valid_face_encoding(encoding: object) -> bool:
+    if not isinstance(encoding, list) or len(encoding) != 128:
+        return False
+    return all(isinstance(value, (int, float)) for value in encoding)

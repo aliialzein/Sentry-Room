@@ -44,8 +44,16 @@ class Settings:
     )
 
     face_match_tolerance: float = float(os.getenv("FACE_MATCH_TOLERANCE", "0.5"))
+    face_detection_model: str = os.getenv("FACE_DETECTION_MODEL", "hog")
+    face_detection_upsample: int = int(os.getenv("FACE_DETECTION_UPSAMPLE", "2"))
     alert_email_to: str | None = os.getenv("ALERT_EMAIL_TO")
     app_alert_channel: str = os.getenv("APP_ALERT_CHANNEL", "mobile_app")
+    smtp_host: str | None = os.getenv("SMTP_HOST")
+    smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
+    smtp_username: str | None = os.getenv("SMTP_USERNAME")
+    smtp_password: str | None = os.getenv("SMTP_PASSWORD")
+    smtp_from: str | None = os.getenv("SMTP_FROM") or os.getenv("SMTP_USERNAME")
+    smtp_use_tls: bool = field(default_factory=lambda: _bool_env("SMTP_USE_TLS", True))
 
 
 @lru_cache

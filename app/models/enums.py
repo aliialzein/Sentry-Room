@@ -32,3 +32,9 @@ class DeliveryStatus(str, Enum):
     PENDING = "pending"
     SENT = "sent"
     FAILED = "failed"
+
+
+class UserRole(str, Enum):
+    VIEWER = "viewer"
+    SECURITY = "security"
+    ADMIN = "admin"
