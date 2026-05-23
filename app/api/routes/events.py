@@ -9,6 +9,7 @@ from app.models.person import Person
 from app.schemas.event import AuthorizeEventPersonRequest, DetectionRequest, EventCreate, EventRead
 from app.schemas.person import PersonRead
 from app.services.detection import DetectionService
+from app.services.event_messages import websocket_event_message
 from app.services.notification import NotificationService
 from app.services.storage import decode_base64_payload, save_bytes_file
 from app.services.websocket_manager import manager
@@ -51,19 +52,7 @@ async def create_event(payload: EventCreate, db: Session = Depends(get_db)) -> A
 
     db.commit()
     db.refresh(event)
-    
-    import asyncio
-    asyncio.create_task(
-        manager.broadcast(
-            {
-                "type": event.event_type.value,
-                "severity": event.severity.value,
-                "message": event.message,
-                "event_id": event.id,
-                "snapshot_path": event.snapshot_path,
-            }
-        )
-    )
+    await manager.broadcast(websocket_event_message(event))
     return event
 
 
@@ -142,7 +131,7 @@ def authorize_person_from_event(
 
 
 @router.post("/detection", response_model=EventRead, status_code=status.HTTP_201_CREATED)
-def process_detection(payload: DetectionRequest, db: Session = Depends(get_db)) -> AccessEvent:
+async def process_detection(payload: DetectionRequest, db: Session = Depends(get_db)) -> AccessEvent:
     image_bytes = decode_base64_payload(payload.image_base64)
     try:
         event = DetectionService().process_image(
@@ -155,4 +144,5 @@ def process_detection(payload: DetectionRequest, db: Session = Depends(get_db)) 
 
     db.commit()
     db.refresh(event)
+    await manager.broadcast(websocket_event_message(event))
     return event

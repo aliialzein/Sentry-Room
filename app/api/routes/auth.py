@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.user import AuthResponse, UserLogin, UserRegister
 from app.services.security import hash_password, verify_password
@@ -32,6 +33,7 @@ def register_user(payload: UserRegister, db: Session = Depends(get_db)) -> AuthR
         email=payload.email,
         full_name=payload.full_name,
         password_hash=hash_password(payload.password),
+        role=UserRole.ADMIN if _is_first_user(db) else UserRole.VIEWER,
     )
     db.add(user)
     db.commit()
@@ -57,3 +59,7 @@ def login_user(payload: UserLogin, db: Session = Depends(get_db)) -> AuthRespons
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled.")
 
     return AuthResponse(user=user, message="Login successful.")
+
+
+def _is_first_user(db: Session) -> bool:
+    return (db.scalar(select(func.count()).select_from(User)) or 0) == 0

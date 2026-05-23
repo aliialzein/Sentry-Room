@@ -1,4 +1,4 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect # type: ignore
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.services.websocket_manager import manager
 
@@ -7,7 +7,7 @@ router = APIRouter()
 
 
 @router.websocket("/alerts")
-async def websocket_alerts(websocket: WebSocket):
+async def websocket_alerts(websocket: WebSocket) -> None:
     await manager.connect(websocket)
 
     try:

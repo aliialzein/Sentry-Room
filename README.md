@@ -1,54 +1,139 @@
 # Sentry Room
 
-Sentry Room is an AI-based restricted-room security system. A Raspberry Pi reads four hardware inputs, runs camera/person detection, stores evidence in PostgreSQL through a FastAPI backend, and exposes data to the mobile app.
+Sentry Room is a restricted-room security system with a FastAPI backend, PostgreSQL database, AI face detection, camera/sensor integration, and a Flutter app for Android, Windows, and Web testing.
 
-## Architecture
+## Project Map
 
-- `app/main.py`: FastAPI application entry point.
-- `app/api/routes`: HTTP endpoints for health, persons, events, sensor readings, and settings.
-- `app/models`: SQLAlchemy PostgreSQL models for people, events, alerts, sensors, and settings.
-- `app/schemas`: Pydantic request/response models for the mobile app and Raspberry Pi.
-- `app/services`: face recognition, detection decisions, evidence storage, legacy face DB import, and alert creation.
-- `app/iot`: Raspberry Pi camera/pipeline integration points and sensor provider abstractions.
-- `scripts`: local operational scripts for creating tables, importing legacy faces, camera enrollment, and running the camera pipeline.
-- `data/legacy/faces_db.pkl`: migrated legacy face database from `mobiot_mahmezharzein`.
-
-## Main Flows
-
-- Authorized entry: camera image -> face encoding -> authorized person match -> silent `authorized_entry` event.
-- Unauthorized entry: camera image -> unknown face -> saved snapshot -> `unauthorized_entry` event -> pending app/email alert.
-- Enrollment: mobile upload or Pi camera capture -> one face encoding -> `persons.face_encoding` in PostgreSQL.
-- App users: mobile login/register accounts are stored separately in `users`; new users default to `viewer`, not admin.
-- Sensor logging: Pi posts motion, distance, temperature, and humidity readings to `/api/sensor-readings`.
-- Evidence browser: mobile app reads `/api/events` and uses `snapshot_path` to locate saved evidence.
-
-## Legacy Migration
-
-- `mobiot_mahmezharzein/faceperson.py` is now split into `app/services/recognition.py`, `app/services/detection.py`, and `scripts/run_camera_pipeline.py`.
-- `mobiot_mahmezharzein/register_person.py` is now `scripts/register_person.py` with PostgreSQL storage.
-- `mobiot_mahmezharzein/faces_db.pkl` was copied to `data/legacy/faces_db.pkl` and can be imported with `scripts/import_legacy_faces.py`.
-
-## Setup
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-copy .env.example .env
-python scripts/create_tables.py
-uvicorn app.main:app --reload
+```text
+Sentry-Room/
+├── app/                         Backend API, database, services, AI, IoT
+├── Sentry-Room-mobile-app/      Flutter app for Android, Windows, and Web
+├── data/                        Evidence images and optional legacy face data
+├── docs/                        Architecture, contracts, setup notes
+└── scripts/                     Setup, import, camera, and pipeline commands
 ```
 
-Set `DATABASE_URL` in `.env` to your PostgreSQL database before creating tables.
-See `docs/postgresql-setup.md` for the exact local PostgreSQL setup steps.
+Read these first:
 
-Install camera/face-recognition dependencies only when you are ready to run enrollment or the Raspberry Pi pipeline:
+- `docs/architecture.md`: full project architecture
+- `docs/mobile-backend-contract.md`: exact API contract used by the mobile app
+- `docs/database-ai.md`: database tables and AI responsibilities
+- `docs/postgresql-setup.md`: local PostgreSQL setup
 
-```bash
+## Backend
+
+```text
+app/
+├── main.py              Creates FastAPI app, CORS, routes, evidence files
+├── api/routes/          HTTP and WebSocket endpoints
+├── core/                Config and database connection
+├── models/              SQLAlchemy database tables
+├── schemas/             Pydantic request/response models
+├── services/            Business logic: detection, AI, storage, alerts
+└── iot/                 Camera and sensor helpers
+```
+
+Backend layer rule:
+
+```text
+API routes -> services -> database models
+```
+
+## Mobile App
+
+```text
+Sentry-Room-mobile-app/lib/
+├── main.dart
+├── constants/           Backend URL configuration
+├── models/              Dart data models
+├── services/            HTTP API, WebSocket, notifications
+├── providers/           App state
+├── screens/             App pages
+└── widgets/             Reusable UI
+```
+
+The mobile app talks only to the backend. It never connects directly to PostgreSQL.
+
+## Main Flow
+
+```text
+Camera/Sensor
+    ↓
+FastAPI backend
+    ↓
+AI detection + PostgreSQL event
+    ↓
+Evidence image saved under data/evidence
+    ↓
+Mobile app receives WebSocket alert
+    ↓
+User acknowledges event or authorizes person
+```
+
+## Backend Setup
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+```
+
+Edit `.env` and set the correct PostgreSQL password:
+
+```env
+DATABASE_URL=postgresql+psycopg2://postgres:YOUR_PASSWORD@localhost:5432/sentry_room
+```
+
+Create tables:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\create_tables.py
+```
+
+Start backend:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+## Mobile Setup
+
+```powershell
+cd Sentry-Room-mobile-app
+flutter pub get
+flutter run
+```
+
+For a real phone:
+
+```powershell
+flutter run --dart-define=SENTRY_API_BASE_URL=http://YOUR_COMPUTER_IP:8000
+```
+
+## AI And Camera Setup
+
+Install AI/camera dependencies only when needed:
+
+```powershell
 pip install -r requirements-ai.txt
 ```
 
-## Useful Endpoints
+Useful scripts:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\register_person.py "Person Name"
+.\.venv\Scripts\python.exe scripts\run_camera_pipeline.py
+.\.venv\Scripts\python.exe scripts\debug_camera_faces.py
+```
+
+## Important Endpoints
 
 - `GET /api/health`
 - `GET /api/status`
@@ -56,18 +141,30 @@ pip install -r requirements-ai.txt
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `GET /api/users`
-- `PATCH /api/users/{user_id}/role`
-- `PATCH /api/users/{user_id}/status`
+- `GET /api/persons`
+- `POST /api/persons/enroll-from-image`
+- `GET /api/events`
+- `POST /api/events/detection`
+- `PATCH /api/events/{event_id}/acknowledge`
+- `POST /api/events/{event_id}/authorize-person`
+- `POST /api/sensor-readings`
 - `GET /api/camera/snapshot`
 - `GET /api/camera/stream`
-- `POST /api/persons`
-- `POST /api/persons/enroll-from-image`
-- `POST /api/events/detection`
-- `POST /api/events/{event_id}/authorize-person`
-- `GET /api/events`
-- `PATCH /api/events/{event_id}/acknowledge`
-- `POST /api/sensor-readings`
-- `GET /api/sensor-readings/recent`
+- `WS /api/ws/alerts`
+- `GET /evidence/...`
 
-See `docs/scenarios.md` for the complete project scenario list.
-See `docs/alerts-camera-mobile.md` for email alerts, camera stream, and mobile admin authorization.
+## Testing
+
+Backend syntax check:
+
+```powershell
+python -m compileall app scripts
+```
+
+Mobile checks:
+
+```powershell
+cd Sentry-Room-mobile-app
+flutter analyze
+flutter test
+```
