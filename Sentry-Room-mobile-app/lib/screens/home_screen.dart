@@ -8,6 +8,7 @@ import 'people_screen.dart';
 import 'events_screen.dart';
 import 'user_management_screen.dart';
 import 'camera_screen.dart';
+import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -178,7 +179,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         IconButton(
           icon: const Icon(Icons.account_circle_outlined),
-          onPressed: () => auth.logout(),
+          tooltip: 'Profile',
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfileScreen()),
+            );
+          },
         ),
       ],
     );

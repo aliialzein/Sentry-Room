@@ -38,6 +38,11 @@ class UserRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+class UserProfileUpdate(BaseModel):
+    username: str | None = Field(default=None, min_length=3, max_length=80)
+    email: EmailStr | None = None
+    full_name: str | None = Field(default=None, max_length=120)
+
 
 class AuthResponse(BaseModel):
     user: UserRead

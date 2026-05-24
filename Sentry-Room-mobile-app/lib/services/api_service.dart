@@ -209,4 +209,32 @@ class ApiService {
       throw Exception('Failed to update authorization');
     }
   }
+
+  Future<Map<String, dynamic>> updateUserProfile({
+    required int userId,
+    required String username,
+    required String email,
+    required String fullName,
+  }) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/api/users/$userId/profile'),
+      headers: {
+        'Content-Type': 'application/json',
+        'accept': 'application/json',
+      },
+      body: jsonEncode({
+        'username': username,
+        'email': email,
+        'full_name': fullName,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return data as Map<String, dynamic>;
+    }
+
+    throw Exception(data['detail'] ?? 'Failed to update profile.');
+  }
 }

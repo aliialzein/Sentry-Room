@@ -18,6 +18,7 @@ class AuthProvider with ChangeNotifier {
 
   bool get isAuthenticated => _isAuthenticated;
   String? get username => _username;
+  String? get email => _email;
   String? get fullName => _fullName;
   String? get role => _role;
   bool get isAdmin => _isAdmin;
@@ -154,6 +155,65 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  Future<bool> updateProfile({
+    required String username,
+    required String email,
+    required String fullName,
+  }) async {
+    _errorMessage = null;
+
+    if (_userId == null) {
+      _errorMessage = 'No logged-in user found.';
+      notifyListeners();
+      return false;
+    }
+
+    try {
+      final updatedUser = await _apiService.updateUserProfile(
+        userId: _userId!,
+        username: username,
+        email: email,
+        fullName: fullName,
+      );
+
+      _userId = updatedUser['id'];
+      _username = updatedUser['username'];
+      _email = updatedUser['email'];
+      _fullName = updatedUser['full_name'];
+      _role = updatedUser['role'];
+      _isAdmin = updatedUser['is_admin'] ?? false;
+      _isActive = updatedUser['is_active'] ?? true;
+
+      final prefs = await SharedPreferences.getInstance();
+
+      await prefs.setBool('isAuthenticated', true);
+      await prefs.setInt('userId', _userId!);
+      await prefs.setString('username', _username ?? username);
+      await prefs.setString('email', _email ?? email);
+
+      if (_fullName != null && _fullName!.isNotEmpty) {
+        await prefs.setString('fullName', _fullName!);
+      } else {
+        await prefs.remove('fullName');
+      }
+
+      if (_role != null) {
+        await prefs.setString('role', _role!);
+      }
+
+      await prefs.setBool('isAdmin', _isAdmin);
+      await prefs.setBool('isActive', _isActive);
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      debugPrint('Profile update failed: $_errorMessage');
+      notifyListeners();
+      return false;
+    }
+  }
+  
   Future<void> logout() async {
     _isAuthenticated = false;
     _userId = null;
