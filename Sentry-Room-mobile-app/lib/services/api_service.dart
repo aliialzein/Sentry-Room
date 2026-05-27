@@ -27,7 +27,8 @@ class ApiService {
     return '$fallback (${response.statusCode})';
   }
 
-  // --- Auth Endpoints ---
+
+
 
   Future<Map<String, dynamic>> login(String identifier, String password) async {
     final response = await http.post(
@@ -72,7 +73,8 @@ class ApiService {
     }
   }
 
-  // --- User Management Endpoints (Admin) ---
+
+
 
   Future<List<Map<String, dynamic>>> getUsers() async {
     final response = await http.get(Uri.parse('$baseUrl/api/users'));

@@ -14,6 +14,13 @@ class AuthProvider with ChangeNotifier {
   int? _userId;
   String? _errorMessage;
 
+  bool _criticalAlerts = true;
+  bool _cameraAlerts = true;
+  bool _eventNotifications = true;
+  bool _compactDashboard = false;
+  bool _saveActivityLocally = true;
+  bool _settingsLoaded = false;
+
   final ApiService _apiService = ApiService(ApiConstants.baseUrl);
 
   bool get isAuthenticated => _isAuthenticated;
@@ -25,6 +32,14 @@ class AuthProvider with ChangeNotifier {
   bool get isActive => _isActive;
   int? get userId => _userId;
   String? get errorMessage => _errorMessage;
+
+  bool get criticalAlerts => _criticalAlerts;
+  bool get cameraAlerts => _cameraAlerts;
+  bool get eventNotifications => _eventNotifications;
+  bool get compactDashboard => _compactDashboard;
+  bool get saveActivityLocally => _saveActivityLocally;
+  bool get settingsLoaded => _settingsLoaded;
+
 
   AuthProvider() {
     _loadAuthStatus();
@@ -42,6 +57,12 @@ class AuthProvider with ChangeNotifier {
         _role = prefs.getString('role');
         _isAdmin = prefs.getBool('isAdmin') ?? false;
         _isActive = prefs.getBool('isActive') ?? true;
+        _criticalAlerts = prefs.getBool('criticalAlerts') ?? true;
+        _cameraAlerts = prefs.getBool('cameraAlerts') ?? true;
+        _eventNotifications = prefs.getBool('eventNotifications') ?? true;
+        _compactDashboard = prefs.getBool('compactDashboard') ?? false;
+        _saveActivityLocally = prefs.getBool('saveActivityLocally') ?? true;
+        _settingsLoaded = true;
       }
       notifyListeners();
     } catch (e) {
@@ -144,7 +165,6 @@ class AuthProvider with ChangeNotifier {
         fullName: fullName,
       );
       
-      // Auto-login attempt
       debugPrint('Registration success, logging in...');
       return await login(username, password);
     } catch (e) {
@@ -214,6 +234,41 @@ class AuthProvider with ChangeNotifier {
     }
   }
   
+  Future<bool> updateSettings({
+    required bool criticalAlerts,
+    required bool cameraAlerts,
+    required bool eventNotifications,
+    required bool compactDashboard,
+    required bool saveActivityLocally,
+  }) async {
+    _errorMessage = null;
+
+    try {
+      _criticalAlerts = criticalAlerts;
+      _cameraAlerts = cameraAlerts;
+      _eventNotifications = eventNotifications;
+      _compactDashboard = compactDashboard;
+      _saveActivityLocally = saveActivityLocally;
+      _settingsLoaded = true;
+
+      final prefs = await SharedPreferences.getInstance();
+
+      await prefs.setBool('criticalAlerts', _criticalAlerts);
+      await prefs.setBool('cameraAlerts', _cameraAlerts);
+      await prefs.setBool('eventNotifications', _eventNotifications);
+      await prefs.setBool('compactDashboard', _compactDashboard);
+      await prefs.setBool('saveActivityLocally', _saveActivityLocally);
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      debugPrint('Settings update failed: $_errorMessage');
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<void> logout() async {
     _isAuthenticated = false;
     _userId = null;
@@ -225,11 +280,18 @@ class AuthProvider with ChangeNotifier {
     _isActive = false;
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    await prefs.remove('isAuthenticated');
+    await prefs.remove('userId');
+    await prefs.remove('username');
+    await prefs.remove('email');
+    await prefs.remove('fullName');
+    await prefs.remove('role');
+    await prefs.remove('isAdmin');
+    await prefs.remove('isActive');
     notifyListeners();
   }
 
-  // --- User Management ---
+  
   Future<List<Map<String, dynamic>>> fetchAllUsers() async {
     try {
       return await _apiService.getUsers();

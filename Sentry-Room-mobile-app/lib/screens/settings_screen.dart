@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/auth_provider.dart';
 import 'events_screen.dart';
@@ -24,55 +23,38 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _criticalAlerts = true;
-  bool _cameraAlerts = true;
-  bool _eventNotifications = true;
-  bool _compactMode = false;
-  bool _saveActivityLocally = true;
-  bool _isLoading = true;
+  bool _isSaving = false;
 
-  static const _criticalAlertsKey = 'settings_critical_alerts';
-  static const _cameraAlertsKey = 'settings_camera_alerts';
-  static const _eventNotificationsKey = 'settings_event_notifications';
-  static const _compactModeKey = 'settings_compact_mode';
-  static const _saveActivityLocallyKey = 'settings_save_activity_locally';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    if (!mounted) return;
-
-    setState(() {
-      _criticalAlerts = prefs.getBool(_criticalAlertsKey) ?? true;
-      _cameraAlerts = prefs.getBool(_cameraAlertsKey) ?? true;
-      _eventNotifications = prefs.getBool(_eventNotificationsKey) ?? true;
-      _compactMode = prefs.getBool(_compactModeKey) ?? false;
-      _saveActivityLocally = prefs.getBool(_saveActivityLocallyKey) ?? true;
-      _isLoading = false;
-    });
-  }
-
-  Future<void> _updateSetting({
-    required String key,
-    required bool value,
-    required void Function(bool value) updateState,
+  Future<void> _updateSettings({
+    bool? criticalAlerts,
+    bool? cameraAlerts,
+    bool? eventNotifications,
+    bool? compactDashboard,
+    bool? saveActivityLocally,
   }) async {
-    setState(() => updateState(value));
+    final auth = context.read<AuthProvider>();
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(key, value);
+    setState(() => _isSaving = true);
+
+    final success = await auth.updateSettings(
+      criticalAlerts: criticalAlerts ?? auth.criticalAlerts,
+      cameraAlerts: cameraAlerts ?? auth.cameraAlerts,
+      eventNotifications: eventNotifications ?? auth.eventNotifications,
+      compactDashboard: compactDashboard ?? auth.compactDashboard,
+      saveActivityLocally: saveActivityLocally ?? auth.saveActivityLocally,
+    );
 
     if (!mounted) return;
+
+    setState(() => _isSaving = false);
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Setting updated.'),
+      SnackBar(
+        content: Text(
+          success
+              ? 'Setting updated.'
+              : auth.errorMessage ?? 'Failed to update setting.',
+        ),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -82,14 +64,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        icon: const Icon(
-          Icons.logout_rounded,
-          color: _danger,
-          size: 42,
-        ),
+        icon: const Icon(Icons.logout_rounded, color: _danger, size: 42),
         title: const Text('Logout?'),
         content: const Text(
-          'Your local session will be cleared and you will return to the login screen.',
+          'Your session will be cleared and you will return to the login screen.',
           textAlign: TextAlign.center,
         ),
         actionsAlignment: MainAxisAlignment.center,
@@ -164,42 +142,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           IconButton(
             tooltip: 'Edit profile',
-            onPressed: _openProfile,
+            onPressed: _isSaving ? null : _openProfile,
             icon: const Icon(Icons.account_circle_outlined),
           ),
         ],
       ),
       body: SafeArea(
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 980),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _buildHeader(auth, userName),
-                              const SizedBox(height: 18),
-                              _buildAccountSection(auth),
-                              const SizedBox(height: 18),
-                              _buildPreferencesSection(),
-                              const SizedBox(height: 18),
-                              _buildSecuritySection(),
-                              const SizedBox(height: 18),
-                              _buildAboutSection(),
-                            ],
-                          ),
-                        ),
-                      ),
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 980),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildHeader(auth, userName),
+                        const SizedBox(height: 18),
+                        _buildAccountSection(auth),
+                        const SizedBox(height: 18),
+                        _buildPreferencesSection(auth),
+                        const SizedBox(height: 18),
+                        _buildSecuritySection(auth),
+                        if (auth.isAdmin) ...[
+                          const SizedBox(height: 18),
+                          _buildAdminSection(),
+                        ],
+                        const SizedBox(height: 18),
+                        _buildAboutSection(),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -250,6 +230,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
+  Widget _buildAdminSection() {
+    return _GlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _PanelHeader(
+            icon: Icons.admin_panel_settings_rounded,
+            title: 'Admin Tools',
+            subtitle: 'Quick access to administrator screens',
+          ),
+          const SizedBox(height: 14),
+          _ActionRow(
+            icon: Icons.manage_accounts_rounded,
+            title: 'User Management',
+            subtitle: 'Update user roles and account status.',
+            color: _warning,
+            onTap: _openUserManagement,
+          ),
+          _ActionRow(
+            icon: Icons.people_alt_outlined,
+            title: 'Manage Access',
+            subtitle: 'View and manage authorized people.',
+            color: _accent,
+            onTap: _openPeople,
+          ),
+          _ActionRow(
+            icon: Icons.history_rounded,
+            title: 'Events & Logs',
+            subtitle: 'Review room security events.',
+            color: _success,
+            onTap: _openEvents,
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildAccountSection(AuthProvider auth) {
     return _GlassPanel(
@@ -293,13 +309,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 label: 'Edit Profile',
                 icon: Icons.edit_rounded,
                 color: _accent,
-                onPressed: _openProfile,
+                onPressed: _isSaving ? null : _openProfile,
               ),
               _CommandButton(
                 label: 'Logout',
                 icon: Icons.logout_rounded,
                 color: _danger,
-                onPressed: _logout,
+                onPressed: _isSaving ? null : _logout,
               ),
             ],
           ),
@@ -308,7 +324,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildPreferencesSection() {
+  Widget _buildPreferencesSection(AuthProvider auth) {
     return _GlassPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -316,63 +332,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const _PanelHeader(
             icon: Icons.tune_rounded,
             title: 'App Preferences',
-            subtitle: 'Local settings saved on this device',
+            subtitle: 'Settings saved through AuthProvider',
           ),
           const SizedBox(height: 14),
           _SettingSwitchTile(
             icon: Icons.notifications_active_outlined,
             title: 'Critical Alerts',
             subtitle: 'Show warnings for unauthorized or dangerous activity.',
-            value: _criticalAlerts,
+            value: auth.criticalAlerts,
             color: _danger,
-            onChanged: (value) => _updateSetting(
-              key: _criticalAlertsKey,
-              value: value,
-              updateState: (newValue) => _criticalAlerts = newValue,
-            ),
+            enabled: !_isSaving,
+            onChanged: (value) => _updateSettings(criticalAlerts: value),
           ),
           _SettingSwitchTile(
             icon: Icons.videocam_outlined,
             title: 'Camera Alerts',
             subtitle: 'Enable camera-related notification preferences.',
-            value: _cameraAlerts,
+            value: auth.cameraAlerts,
             color: _accent,
-            onChanged: (value) => _updateSetting(
-              key: _cameraAlertsKey,
-              value: value,
-              updateState: (newValue) => _cameraAlerts = newValue,
-            ),
+            enabled: !_isSaving,
+            onChanged: (value) => _updateSettings(cameraAlerts: value),
           ),
           _SettingSwitchTile(
             icon: Icons.history_rounded,
             title: 'Event Notifications',
             subtitle: 'Notify when new room events are detected.',
-            value: _eventNotifications,
+            value: auth.eventNotifications,
             color: _warning,
-            onChanged: (value) => _updateSetting(
-              key: _eventNotificationsKey,
-              value: value,
-              updateState: (newValue) => _eventNotifications = newValue,
-            ),
+            enabled: !_isSaving,
+            onChanged: (value) => _updateSettings(eventNotifications: value),
           ),
           _SettingSwitchTile(
             icon: Icons.space_dashboard_outlined,
             title: 'Compact Dashboard',
-            subtitle: 'Prepare a denser layout preference for smaller screens.',
-            value: _compactMode,
+            subtitle: 'Prepare a denser dashboard layout preference.',
+            value: auth.compactDashboard,
             color: _success,
-            onChanged: (value) => _updateSetting(
-              key: _compactModeKey,
-              value: value,
-              updateState: (newValue) => _compactMode = newValue,
-            ),
+            enabled: !_isSaving,
+            onChanged: (value) => _updateSettings(compactDashboard: value),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSecuritySection() {
+  Widget _buildSecuritySection(AuthProvider auth) {
     return _GlassPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -380,20 +384,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const _PanelHeader(
             icon: Icons.shield_rounded,
             title: 'Security Preferences',
-            subtitle: 'Frontend-ready controls for future backend preferences',
+            subtitle: 'Local preference controls for the security dashboard',
           ),
           const SizedBox(height: 14),
           _SettingSwitchTile(
             icon: Icons.storage_rounded,
             title: 'Save Activity Locally',
-            subtitle: 'Keep preference and session values in SharedPreferences.',
-            value: _saveActivityLocally,
+            subtitle: 'Keep settings and session values on this device.',
+            value: auth.saveActivityLocally,
             color: _success,
-            onChanged: (value) => _updateSetting(
-              key: _saveActivityLocallyKey,
-              value: value,
-              updateState: (newValue) => _saveActivityLocally = newValue,
-            ),
+            enabled: !_isSaving,
+            onChanged: (value) => _updateSettings(saveActivityLocally: value),
+          ),
+          const SizedBox(height: 12),
+          const _NoticeBox(
+            icon: Icons.cloud_sync_outlined,
+            title: 'Ready for backend sync',
+            message:
+                'The frontend is now organized through AuthProvider. When backend settings endpoints are added, only AuthProvider needs to call ApiService.',
           ),
         ],
       ),
@@ -421,15 +429,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _InfoTile(
             icon: Icons.devices_rounded,
             title: 'Local Settings',
-            subtitle: 'Preferences are stored on this device',
+            subtitle: 'Preferences are currently stored on this device',
             color: _success,
           ),
         ],
       ),
     );
   }
+  
 }
-
 class _GlassPanel extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -653,6 +661,7 @@ class _SettingSwitchTile extends StatelessWidget {
   final String subtitle;
   final bool value;
   final Color color;
+  final bool enabled;
   final ValueChanged<bool> onChanged;
 
   const _SettingSwitchTile({
@@ -662,6 +671,7 @@ class _SettingSwitchTile extends StatelessWidget {
     required this.value,
     required this.color,
     required this.onChanged,
+    this.enabled = true,
   });
 
   @override
@@ -705,7 +715,7 @@ class _SettingSwitchTile extends StatelessWidget {
           Switch.adaptive(
             value: value,
             activeThumbColor: color,
-            onChanged: onChanged,
+            onChanged: enabled ? onChanged : null,
           ),
         ],
       ),
