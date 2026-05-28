@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
+import '../widgets/home_colors.dart';
 import '../providers/auth_provider.dart';
 import 'events_screen.dart';
 import 'people_screen.dart';
 import 'profile_screen.dart';
 import 'user_management_screen.dart';
 
-const _background = Color(0xFF070B16);
-const _surface = Color(0xFF111827);
-const _border = Color(0x1FFFFFFF);
-const _accent = Color(0xFF38BDF8);
-const _success = Color(0xFF34D399);
-const _warning = Color(0xFFFBBF24);
-const _danger = Color(0xFFFB7185);
+const _surface = HomeColors.surface;
+const _border = HomeColors.border;
+const _background = HomeColors.background;
+const _accent = HomeColors.accent;
+const _success = HomeColors.success;
+const _warning = HomeColors.warning;
+const _danger = HomeColors.danger;
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});

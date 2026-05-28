@@ -13,10 +13,10 @@ class _AuthScreenState extends State<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLogin = true;
   String _identifier = ''; // Used for login (username or email)
-  String _username = ''; // Used for registration
-  String _email = ''; // Used for registration
+  String _username = '';
+  String _email = '';
   String _password = '';
-  String _fullName = ''; // Used for registration
+  String _fullName = '';
   bool _isLoading = false;
 
   void _submit() async {
