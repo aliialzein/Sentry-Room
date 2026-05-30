@@ -12,6 +12,7 @@ class AuthProvider with ChangeNotifier {
   bool _isAdmin = false;
   bool _isActive = false;
   int? _userId;
+  String? _token;
   String? _errorMessage;
 
   bool _criticalAlerts = true;
@@ -31,6 +32,7 @@ class AuthProvider with ChangeNotifier {
   bool get isAdmin => _isAdmin;
   bool get isActive => _isActive;
   int? get userId => _userId;
+  String? get token => _token;
   String? get errorMessage => _errorMessage;
 
   bool get criticalAlerts => _criticalAlerts;
@@ -55,6 +57,7 @@ class AuthProvider with ChangeNotifier {
         _email = prefs.getString('email');
         _fullName = prefs.getString('fullName');
         _role = prefs.getString('role');
+        _token = prefs.getString('accessToken');
         _isAdmin = prefs.getBool('isAdmin') ?? false;
         _isActive = prefs.getBool('isActive') ?? true;
         _criticalAlerts = prefs.getBool('criticalAlerts') ?? true;
@@ -109,6 +112,7 @@ class AuthProvider with ChangeNotifier {
       _email = user['email'];
       _fullName = user['full_name'];
       _role = user['role'];
+      _token = data['access_token']?.toString();
       _isAdmin = user['is_admin'] ?? false;
       _isActive = active;
 
@@ -135,6 +139,10 @@ class AuthProvider with ChangeNotifier {
         await prefs.setString('role', _role!);
       }
 
+      if (_token != null) {
+        await prefs.setString('accessToken', _token!);
+      }
+
       await prefs.setBool('isAdmin', _isAdmin);
       await prefs.setBool('isActive', _isActive);
 
@@ -142,6 +150,7 @@ class AuthProvider with ChangeNotifier {
       return true;
     } catch (e) {
       _isAuthenticated = false;
+      _token = null;
       _errorMessage = e.toString().replaceAll('Exception: ', '');
       debugPrint('Login Failed: $_errorMessage');
       notifyListeners();
@@ -276,6 +285,7 @@ class AuthProvider with ChangeNotifier {
     _email = null;
     _fullName = null;
     _role = null;
+    _token = null;
     _isAdmin = false;
     _isActive = false;
 
@@ -286,6 +296,7 @@ class AuthProvider with ChangeNotifier {
     await prefs.remove('email');
     await prefs.remove('fullName');
     await prefs.remove('role');
+    await prefs.remove('accessToken');
     await prefs.remove('isAdmin');
     await prefs.remove('isActive');
     notifyListeners();

@@ -27,6 +27,17 @@ class ApiService {
     return '$fallback (${response.statusCode})';
   }
 
+  Map<String, String> buildJsonHeaders({String? accessToken}) {
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'accept': 'application/json',
+    };
+    if (accessToken != null && accessToken.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $accessToken';
+    }
+    return headers;
+  }
+
 
 
 

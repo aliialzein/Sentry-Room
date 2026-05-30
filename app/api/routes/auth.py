@@ -6,7 +6,7 @@ from app.api.deps import get_db
 from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.user import AuthResponse, UserLogin, UserRegister
-from app.services.security import hash_password, verify_password
+from app.services.security import create_access_token, hash_password, verify_password
 
 
 router = APIRouter()
@@ -39,7 +39,11 @@ def register_user(payload: UserRegister, db: Session = Depends(get_db)) -> AuthR
     db.commit()
     db.refresh(user)
 
-    return AuthResponse(user=user, message="User registered successfully.")
+    return AuthResponse(
+        user=user,
+        message="User registered successfully.",
+        access_token=create_access_token(user.id),
+    )
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -58,7 +62,11 @@ def login_user(payload: UserLogin, db: Session = Depends(get_db)) -> AuthRespons
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled.")
 
-    return AuthResponse(user=user, message="Login successful.")
+    return AuthResponse(
+        user=user,
+        message="Login successful.",
+        access_token=create_access_token(user.id),
+    )
 
 
 def _is_first_user(db: Session) -> bool:

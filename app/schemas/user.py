@@ -47,3 +47,4 @@ class UserProfileUpdate(BaseModel):
 class AuthResponse(BaseModel):
     user: UserRead
     message: str
+    access_token: str | None = None

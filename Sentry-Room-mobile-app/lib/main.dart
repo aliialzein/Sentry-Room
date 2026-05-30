@@ -4,6 +4,8 @@ import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'providers/auth_provider.dart';
 import 'providers/sentry_provider.dart';
+import 'screens/emergency/providers/emergency_settings_provider.dart';
+import 'screens/emergency/providers/emergency_incident_log_provider.dart';
 import 'services/notification_service.dart';
 
 void main() async {
@@ -15,6 +17,8 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => SentryProvider()),
+        ChangeNotifierProvider(create: (_) => EmergencySettingsProvider()),
+        ChangeNotifierProvider(create: (_) => EmergencyIncidentLogProvider()),
       ],
       child: const SentryRoomApp(),
     ),

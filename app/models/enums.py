@@ -34,6 +34,13 @@ class DeliveryStatus(str, Enum):
     FAILED = "failed"
 
 
+class EmergencyIncidentStatus(str, Enum):
+    CONFIRMED = "confirmed"
+    OPENED_EXTERNAL_APP = "opened_external_app"
+    FAILED_TO_OPEN_EXTERNAL_APP = "failed_to_open_external_app"
+    SHARED = "shared"
+
+
 class UserRole(str, Enum):
     VIEWER = "viewer"
     SECURITY = "security"

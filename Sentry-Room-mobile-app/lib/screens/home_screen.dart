@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import 'settings_screen.dart';
+import 'emergency/emergency_screen.dart';
 import '../models/sentry_models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/sentry_provider.dart';
@@ -179,6 +180,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openEmergency(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const EmergencyScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final sentry = context.watch<SentryProvider>();
@@ -222,6 +230,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             isAdmin: auth.isAdmin,
                             now: _now,
                             onOpenCamera: () => _openCamera(context),
+                            onOpenEmergency: () => _openEmergency(context),
                             onOpenUserManagement: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -477,7 +486,11 @@ class _HomeScreenState extends State<HomeScreen> {
           physics: const NeverScrollableScrollPhysics(),
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
-          childAspectRatio: columns == 1 ? 2.35 : 1.35,
+          childAspectRatio: columns == 1
+              ? 1.65
+              : columns == 2
+                  ? 1.3
+                  : 1.25,
           children: [
             StatusMetricCard(
               title: 'Temperature',

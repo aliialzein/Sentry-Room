@@ -111,6 +111,13 @@ flutter pub get
 flutter run
 ```
 
+To Run Emulator:
+
+```powershell
+flutter emulators --launch Medium_Phone_API_36.1
+flutter run -d emulator-5554
+```
+
 For a real phone:
 
 ```powershell
