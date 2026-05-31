@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
+import 'providers/analytics_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/sentry_provider.dart';
 import 'screens/emergency/providers/emergency_settings_provider.dart';
@@ -17,6 +18,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => SentryProvider()),
+        ChangeNotifierProvider(create: (_) => AnalyticsProvider()),
         ChangeNotifierProvider(create: (_) => EmergencySettingsProvider()),
         ChangeNotifierProvider(create: (_) => EmergencyIncidentLogProvider()),
       ],

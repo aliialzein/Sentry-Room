@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import 'settings_screen.dart';
+import 'analytics/analytics_screen.dart';
 import 'emergency/emergency_screen.dart';
 import '../models/sentry_models.dart';
 import '../providers/auth_provider.dart';
@@ -187,6 +188,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openAnalytics(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AnalyticsScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final sentry = context.watch<SentryProvider>();
@@ -231,6 +239,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             now: _now,
                             onOpenCamera: () => _openCamera(context),
                             onOpenEmergency: () => _openEmergency(context),
+                            onOpenAnalytics: () => _openAnalytics(context),
                             onOpenUserManagement: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -261,6 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onOpenCamera: () => _openCamera(context),
         onOpenPeople: () => _openPeople(context),
         onOpenEvents: () => _openEvents(context),
+        onOpenAnalytics: () => _openAnalytics(context),
         onOpenSettings: () => _openSettings(context),
       ),
     );

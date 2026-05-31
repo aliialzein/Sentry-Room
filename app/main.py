@@ -1,6 +1,6 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI # type: ignore
+from fastapi.middleware.cors import CORSMiddleware # type: ignore
+from fastapi.staticfiles import StaticFiles # type: ignore
 
 from app.api.router import api_router
 from app.core.config import get_settings

@@ -54,6 +54,8 @@ class Settings:
     smtp_password: str | None = os.getenv("SMTP_PASSWORD")
     smtp_from: str | None = os.getenv("SMTP_FROM") or os.getenv("SMTP_USERNAME")
     smtp_use_tls: bool = field(default_factory=lambda: _bool_env("SMTP_USE_TLS", True))
+    openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
+    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
     secret_key: str = os.getenv("SECRET_KEY", "change-this-secret")
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))

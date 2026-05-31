@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routes import auth, camera, emergency, events, health, persons, sensors, settings, users, ws
+from app.api.routes import ai_reporting, analytics, auth, camera, emergency, events, health, persons, reporting, sensors, settings, users, ws
 
 
 api_router = APIRouter(prefix="/api")
@@ -13,4 +13,7 @@ api_router.include_router(events.router, prefix="/events", tags=["events"])
 api_router.include_router(sensors.router, prefix="/sensor-readings", tags=["sensor-readings"])
 api_router.include_router(settings.router, prefix="/settings", tags=["settings"])
 api_router.include_router(emergency.router, prefix="/emergency-incidents", tags=["emergency-incidents"])
+api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+api_router.include_router(reporting.router, prefix="/reports", tags=["reports"])
+api_router.include_router(ai_reporting.router, prefix="/ai-reports", tags=["ai-reports"])
 api_router.include_router(ws.router, prefix="/ws", tags=["websocket"])

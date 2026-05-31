@@ -9,6 +9,7 @@ class HomeBottomNav extends StatelessWidget {
     required this.onOpenCamera,
     required this.onOpenPeople,
     required this.onOpenEvents,
+    required this.onOpenAnalytics,
     required this.onOpenSettings,
   });
 
@@ -16,6 +17,7 @@ class HomeBottomNav extends StatelessWidget {
   final VoidCallback onOpenCamera;
   final VoidCallback onOpenPeople;
   final VoidCallback onOpenEvents;
+  final VoidCallback onOpenAnalytics;
   final VoidCallback onOpenSettings;
 
   @override
@@ -30,6 +32,11 @@ class HomeBottomNav extends StatelessWidget {
         icon: Icon(Icons.videocam_outlined),
         selectedIcon: Icon(Icons.videocam_rounded),
         label: 'Camera',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.analytics_outlined),
+        selectedIcon: Icon(Icons.analytics_rounded),
+        label: 'Analytics',
       ),
       if (isAdmin)
         const NavigationDestination(
@@ -66,17 +73,21 @@ class HomeBottomNav extends StatelessWidget {
             onOpenCamera();
             return;
           }
+          if (index == 2) {
+            onOpenAnalytics();
+            return;
+          }
           if (isAdmin) {
-            if (index == 2) {
+            if (index == 3) {
               onOpenPeople();
-            } else if (index == 3) {
+            } else if (index == 4) {
               onOpenEvents();
             } else {
               onOpenSettings();
             }
             return;
           }
-          if (index == 2) {
+          if (index == 3) {
             onOpenEvents();
           } else {
             onOpenSettings();

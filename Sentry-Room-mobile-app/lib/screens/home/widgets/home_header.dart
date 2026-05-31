@@ -22,6 +22,7 @@ class HomeHeader extends StatelessWidget {
     required this.onOpenUserManagement,
     required this.onOpenProfile,
     required this.onOpenEmergency,
+    required this.onOpenAnalytics,
   });
 
   final String statusLabel;
@@ -37,6 +38,7 @@ class HomeHeader extends StatelessWidget {
   final VoidCallback onOpenUserManagement;
   final VoidCallback onOpenProfile;
   final VoidCallback onOpenEmergency;
+  final VoidCallback onOpenAnalytics;
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +100,11 @@ class HomeHeader extends StatelessWidget {
                 tooltip: 'Open emergency center',
                 icon: Icons.emergency_rounded,
                 onPressed: onOpenEmergency,
+              ),
+              HeaderIconButton(
+                tooltip: 'Open analytics',
+                icon: Icons.analytics_rounded,
+                onPressed: onOpenAnalytics,
               ),
               HeaderIconButton(
                 tooltip: 'Open live camera',
