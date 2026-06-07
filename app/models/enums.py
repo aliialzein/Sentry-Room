@@ -20,6 +20,7 @@ class SensorType(str, Enum):
     CAMERA = "camera"
     MOTION = "motion"
     TEMPERATURE_HUMIDITY = "temperature_humidity"
+    LIGHT = "light"
     DISTANCE = "distance"
 
 
