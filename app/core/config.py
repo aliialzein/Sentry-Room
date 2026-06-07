@@ -60,6 +60,17 @@ class Settings:
     secret_key: str = os.getenv("SECRET_KEY", "change-this-secret")
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
+    pi_camera_enabled: bool = field(default_factory=lambda: _bool_env("PI_CAMERA_ENABLED", True))
+    pi_camera_tcp_host: str = os.getenv("PI_CAMERA_TCP_HOST", "10.0.0.1")
+    pi_camera_tcp_port: int = int(os.getenv("PI_CAMERA_TCP_PORT", "9000"))
+    mqtt_host: str = os.getenv("MQTT_HOST", "localhost")
+    mqtt_port: int = int(os.getenv("MQTT_PORT", "1883"))
+    vision_description_enabled: bool = field(default_factory=lambda: _bool_env("VISION_DESCRIPTION_ENABLED", True))
+    ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    ollama_vision_model: str = os.getenv("OLLAMA_VISION_MODEL", "llava")
+    vision_description_timeout_seconds: float = float(os.getenv("VISION_DESCRIPTION_TIMEOUT_SECONDS", "4"))
+    vision_description_max_chars: int = int(os.getenv("VISION_DESCRIPTION_MAX_CHARS", "90"))
+
 
 @lru_cache
 def get_settings() -> Settings:

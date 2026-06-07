@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import 'settings_screen.dart';
-import 'analytics/analytics_screen.dart';
+import 'analytics_screen.dart';
 import 'emergency/emergency_screen.dart';
 import '../models/sentry_models.dart';
 import '../providers/auth_provider.dart';

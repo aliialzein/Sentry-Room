@@ -72,6 +72,24 @@ User acknowledges event or authorizes person
 
 ## Backend Setup
 
+On the Ubuntu server, the backend is the main application. The Raspberry Pi only sends sensor data and camera frames.
+
+Create `.env` on the server and keep it out of Git/SFTP syncing:
+
+```env
+DATABASE_URL=postgresql+psycopg2://YOUR_NEON_URL
+PI_CAMERA_ENABLED=true
+PI_CAMERA_TCP_HOST=10.0.0.1
+PI_CAMERA_TCP_PORT=9000
+```
+
+The Pi camera stream sends frames to `10.0.0.1:9000`. The backend exposes those frames through:
+
+```text
+GET /api/camera/snapshot
+GET /api/camera/stream
+```
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\activate

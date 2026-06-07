@@ -14,8 +14,8 @@ import '../../providers/analytics_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/ai_report_service.dart';
 import '../../services/report_service.dart';
-import '../emergency/providers/emergency_incident_log_provider.dart';
-import '../home/widgets/home_widgets.dart';
+import 'emergency/providers/emergency_incident_log_provider.dart';
+import 'home/widgets/home_widgets.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
