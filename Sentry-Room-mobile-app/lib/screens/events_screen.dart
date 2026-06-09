@@ -33,6 +33,27 @@ class EventsScreen extends StatelessWidget {
                         .withValues(alpha: 0.3),
                     child: ExpansionTile(
                       leading: _getSeverityIcon(event.severity),
+                      trailing: event.isAcknowledged
+                          ? const Icon(Icons.verified_outlined)
+                          : IconButton(
+                              tooltip: 'Acknowledge event',
+                              icon: const Icon(Icons.done_all),
+                              onPressed: () async {
+                                final success =
+                                    await sentry.acknowledgeEvent(event.id);
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      success
+                                          ? 'Event acknowledged.'
+                                          : (sentry.lastActionError ??
+                                              'Failed to acknowledge event.'),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                       title: Text(
                         event.message,
                         style: TextStyle(
@@ -54,6 +75,19 @@ class EventsScreen extends StatelessWidget {
                             children: [
                               _buildDetailRow('Type', event.eventType),
                               _buildDetailRow('Severity', event.severity),
+                              if (event.lastSeenAt != null ||
+                                  event.endedAt != null)
+                                _buildDetailRow(
+                                    'Status',
+                                    event.endedAt == null
+                                        ? 'Active'
+                                        : 'Ended'),
+                              if (event.lastSeenAt != null)
+                                _buildDetailRow('Last seen',
+                                    _formatTimestamp(event.lastSeenAt!)),
+                              if (event.endedAt != null)
+                                _buildDetailRow(
+                                    'Ended', _formatTimestamp(event.endedAt!)),
                               if (event.confidence != null)
                                 _buildDetailRow('Confidence',
                                     '${(event.confidence! * 100).toStringAsFixed(1)}%'),
@@ -114,6 +148,10 @@ class EventsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _formatTimestamp(DateTime value) {
+    return DateFormat('MMM dd, yyyy - HH:mm:ss').format(value);
   }
 
   Widget _getSeverityIcon(String severity) {

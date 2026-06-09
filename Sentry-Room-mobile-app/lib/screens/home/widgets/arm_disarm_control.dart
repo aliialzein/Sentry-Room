@@ -1,23 +1,30 @@
 import 'package:flutter/material.dart';
 
-import 'home_colors.dart';
 import 'icon_bubble.dart';
 
 class ArmDisarmControl extends StatelessWidget {
   final bool isArmed;
+  final String modeLabel;
+  final String modeDescription;
+  final Color modeColor;
+  final IconData modeIcon;
   final bool isReadOnly;
   final VoidCallback onChanged;
 
   const ArmDisarmControl({
     super.key,
     required this.isArmed,
+    required this.modeLabel,
+    required this.modeDescription,
+    required this.modeColor,
+    required this.modeIcon,
     required this.onChanged,
     this.isReadOnly = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = isArmed ? HomeColors.success : HomeColors.warning;
+    final color = modeColor;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -28,7 +35,7 @@ class ArmDisarmControl extends StatelessWidget {
       child: Row(
         children: [
           IconBubble(
-            icon: isArmed ? Icons.shield_rounded : Icons.shield_outlined,
+            icon: modeIcon,
             color: color,
           ),
           const SizedBox(width: 12),
@@ -37,7 +44,7 @@ class ArmDisarmControl extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isArmed ? 'System Armed' : 'System Disarmed',
+                  modeLabel,
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
@@ -45,9 +52,7 @@ class ArmDisarmControl extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  isArmed
-                      ? 'Door, camera, and sensor alerts are active.'
-                      : 'Alerts are visible, but active response is paused.',
+                  modeDescription,
                   style: const TextStyle(
                     color: Colors.white54,
                     fontSize: 12,

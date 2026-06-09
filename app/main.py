@@ -8,16 +8,20 @@ from fastapi.staticfiles import StaticFiles # type: ignore
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.services import mqtt_bridge
+from app.services.detection_worker import person_detection_worker
 from app.services.pi_camera_stream import pi_camera_stream
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    mqtt_bridge.start(asyncio.get_event_loop())
+    loop = asyncio.get_event_loop()
+    mqtt_bridge.start(loop)
     pi_camera_stream.start()
+    person_detection_worker.start(loop)
     try:
         yield
     finally:
+        person_detection_worker.stop()
         pi_camera_stream.stop()
 
 

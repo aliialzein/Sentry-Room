@@ -61,7 +61,11 @@ class SentryRoomApp extends StatelessWidget {
           titleLarge: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
       ),
-      home: const HomeScreen(), // TODO: restore auth gate
+      home: Consumer<AuthProvider>(
+        builder: (context, auth, _) {
+          return auth.isAuthenticated ? const HomeScreen() : const AuthScreen();
+        },
+      ),
     );
   }
 }

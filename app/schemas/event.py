@@ -39,4 +39,6 @@ class EventRead(BaseModel):
     snapshot_path: str | None
     sensor_payload: dict | None
     is_acknowledged: bool
+    last_seen_at: datetime | None
+    ended_at: datetime | None
     created_at: datetime

@@ -23,6 +23,8 @@ class AccessEvent(Base):
     snapshot_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     sensor_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     is_acknowledged: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     person: Mapped["Person | None"] = relationship("Person", back_populates="events")

@@ -42,21 +42,22 @@ class ApiService {
 
 
   Future<Map<String, dynamic>> login(String identifier, String password) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/api/auth/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({
-        'identifier': identifier,
-        'password': password,
-      }),
-    );
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/api/auth/login'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            'identifier': identifier,
+            'password': password,
+          }),
+        )
+        .timeout(_requestTimeout);
 
     if (response.statusCode == 200) {
       return json.decode(response.body);
-    } else {
-      final errorData = json.decode(response.body);
-      throw Exception(errorData['detail'] ?? 'Failed to login');
     }
+
+    throw Exception(_errorMessage(response, 'Failed to login'));
   }
 
   Future<Map<String, dynamic>> register({
@@ -65,23 +66,24 @@ class ApiService {
     required String password,
     required String fullName,
   }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/api/auth/register'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({
-        'username': username,
-        'email': email,
-        'password': password,
-        'full_name': fullName,
-      }),
-    );
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/api/auth/register'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            'username': username,
+            'email': email,
+            'password': password,
+            'full_name': fullName,
+          }),
+        )
+        .timeout(_requestTimeout);
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       return json.decode(response.body);
-    } else {
-      final errorData = json.decode(response.body);
-      throw Exception(errorData['detail'] ?? 'Failed to register');
     }
+
+    throw Exception(_errorMessage(response, 'Failed to register'));
   }
 
 
@@ -138,6 +140,30 @@ class ApiService {
     throw Exception(_errorMessage(response, 'Failed to load live status'));
   }
 
+  Future<Map<String, dynamic>> getSecurityMode() async {
+    final response = await http
+        .get(Uri.parse('$baseUrl/api/settings/security-mode'))
+        .timeout(_requestTimeout);
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    throw Exception(_errorMessage(response, 'Failed to load security mode'));
+  }
+
+  Future<Map<String, dynamic>> updateSecurityMode(String mode) async {
+    final response = await http
+        .put(
+          Uri.parse('$baseUrl/api/settings/security-mode'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({'mode': mode}),
+        )
+        .timeout(_requestTimeout);
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    throw Exception(_errorMessage(response, 'Failed to update security mode'));
+  }
+
   Future<List<Person>> getPersons() async {
     final response = await http
         .get(Uri.parse('$baseUrl/api/persons'))
@@ -163,6 +189,24 @@ class ApiService {
       return Person.fromJson(json.decode(response.body));
     }
     throw Exception('Failed to create person');
+  }
+
+  Future<Person> enrollPersonFromCamera(String fullName, String? role) async {
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/api/persons/enroll-from-camera'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            'full_name': fullName,
+            'role': role,
+            'is_authorized': true,
+          }),
+        )
+        .timeout(const Duration(seconds: 20));
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return Person.fromJson(json.decode(response.body));
+    }
+    throw Exception(_errorMessage(response, 'Failed to enroll person'));
   }
 
   Future<List<Event>> getEvents({int limit = 50}) async {

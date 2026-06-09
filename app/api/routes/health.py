@@ -7,6 +7,7 @@ from app.api.deps import get_db
 from app.models.enums import EventSeverity, SensorType
 from app.models.event import AccessEvent
 from app.models.sensor import SensorReading
+from app.models.system import SystemSetting
 
 
 router = APIRouter()
@@ -68,6 +69,15 @@ def _database_live_status(db: Session) -> dict:
     return {
         "api": "online",
         "database": "online",
+        "security_mode": _security_mode(db),
         "latest_readings": latest_readings,
         "active_unacknowledged_events": active_alerts or 0,
     }
+
+
+def _security_mode(db: Session) -> str:
+    setting = db.get(SystemSetting, "security_mode")
+    if setting is None:
+        return "working_hours"
+    mode = str((setting.value or {}).get("mode") or "working_hours")
+    return "locked" if mode in {"deep_night", "lockdown"} else mode

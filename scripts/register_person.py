@@ -8,6 +8,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from app.core.database import SessionLocal
 from app.iot.camera import find_camera
 from app.models.person import Person
+from app.services.face_index import face_index
 from app.services.recognition import FaceRecognitionService
 from app.services.storage import save_bytes_file
 
@@ -54,8 +55,10 @@ def main() -> None:
 
     db = SessionLocal()
     try:
-        person = Person(full_name=args.name, role=args.role, is_authorized=True, face_encoding=encoding, image_path=image_path)
+        person = Person(full_name=args.name, role=args.role, is_authorized=True, image_path=image_path)
         db.add(person)
+        db.flush()
+        face_index.add_person_encoding(person.id, encoding)
         db.commit()
         db.refresh(person)
     finally:

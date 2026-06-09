@@ -42,10 +42,14 @@ class Settings:
     legacy_faces_db: Path = field(
         default_factory=lambda: _path_env("LEGACY_FACES_DB", PROJECT_ROOT / "data" / "legacy" / "faces_db.pkl")
     )
+    face_index_path: Path = field(
+        default_factory=lambda: _path_env("FACE_INDEX_PATH", PROJECT_ROOT / "data" / "face_index" / "face_index.npz")
+    )
 
     face_match_tolerance: float = float(os.getenv("FACE_MATCH_TOLERANCE", "0.5"))
     face_detection_model: str = os.getenv("FACE_DETECTION_MODEL", "hog")
     face_detection_upsample: int = int(os.getenv("FACE_DETECTION_UPSAMPLE", "2"))
+    face_recognition_enabled: bool = field(default_factory=lambda: _bool_env("FACE_RECOGNITION_ENABLED", False))
     alert_email_to: str | None = os.getenv("ALERT_EMAIL_TO")
     app_alert_channel: str = os.getenv("APP_ALERT_CHANNEL", "mobile_app")
     smtp_host: str | None = os.getenv("SMTP_HOST")
@@ -63,6 +67,7 @@ class Settings:
     pi_camera_enabled: bool = field(default_factory=lambda: _bool_env("PI_CAMERA_ENABLED", True))
     pi_camera_tcp_host: str = os.getenv("PI_CAMERA_TCP_HOST", "10.0.0.1")
     pi_camera_tcp_port: int = int(os.getenv("PI_CAMERA_TCP_PORT", "9000"))
+    pi_camera_mjpeg_fps: float = float(os.getenv("PI_CAMERA_MJPEG_FPS", "5"))
     mqtt_host: str = os.getenv("MQTT_HOST", "localhost")
     mqtt_port: int = int(os.getenv("MQTT_PORT", "1883"))
     vision_description_enabled: bool = field(default_factory=lambda: _bool_env("VISION_DESCRIPTION_ENABLED", True))
@@ -70,6 +75,14 @@ class Settings:
     ollama_vision_model: str = os.getenv("OLLAMA_VISION_MODEL", "llava")
     vision_description_timeout_seconds: float = float(os.getenv("VISION_DESCRIPTION_TIMEOUT_SECONDS", "4"))
     vision_description_max_chars: int = int(os.getenv("VISION_DESCRIPTION_MAX_CHARS", "90"))
+
+    detection_worker_enabled: bool = field(default_factory=lambda: _bool_env("DETECTION_WORKER_ENABLED", True))
+    detection_sample_interval_seconds: float = float(os.getenv("DETECTION_SAMPLE_INTERVAL_SECONDS", "2"))
+    yolo_model_path: str = os.getenv("YOLO_MODEL_PATH", "yolov8n.pt")
+    yolo_image_size: int = int(os.getenv("YOLO_IMAGE_SIZE", "416"))
+    yolo_person_confidence: float = float(os.getenv("YOLO_PERSON_CONFIDENCE", "0.55"))
+    incident_clear_after_seconds: int = int(os.getenv("INCIDENT_CLEAR_AFTER_SECONDS", "300"))
+    identity_detection_interval_seconds: float = float(os.getenv("IDENTITY_DETECTION_INTERVAL_SECONDS", "4"))
 
 
 @lru_cache

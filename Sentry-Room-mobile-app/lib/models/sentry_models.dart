@@ -3,6 +3,7 @@ class Person {
   final String fullName;
   final String? role;
   final bool isAuthorized;
+  final String? imagePath;
   final String? notes;
 
   Person({
@@ -10,6 +11,7 @@ class Person {
     required this.fullName,
     this.role,
     required this.isAuthorized,
+    this.imagePath,
     this.notes,
   });
 
@@ -19,6 +21,7 @@ class Person {
       fullName: json['full_name'] ?? 'Unknown',
       role: json['role'],
       isAuthorized: json['is_authorized'] ?? false,
+      imagePath: json['image_path'],
       notes: json['notes'],
     );
   }
@@ -32,7 +35,10 @@ class Event {
   final int? personId;
   final double? confidence;
   final String? snapshotPath;
+  final Map<String, dynamic>? sensorPayload;
   final bool isAcknowledged;
+  final DateTime? lastSeenAt;
+  final DateTime? endedAt;
   final DateTime createdAt;
 
   Event({
@@ -43,9 +49,37 @@ class Event {
     this.personId,
     this.confidence,
     this.snapshotPath,
+    this.sensorPayload,
     required this.isAcknowledged,
+    this.lastSeenAt,
+    this.endedAt,
     required this.createdAt,
   });
+
+  bool get hasCapturedUnknownFace {
+    final payload = sensorPayload;
+    if (payload == null) return false;
+
+    final unknownFaceCount = payload['unknown_face_count'];
+    if (unknownFaceCount is num && unknownFaceCount > 0) {
+      return true;
+    }
+
+    final legacyEncodings = payload['unknown_face_encodings'];
+    if (legacyEncodings is List && legacyEncodings.isNotEmpty) {
+      return true;
+    }
+
+    final identities = payload['identities'];
+    if (identities is List) {
+      return identities.any(
+        (identity) =>
+            identity is Map && identity['status']?.toString() == 'unknown_face',
+      );
+    }
+
+    return false;
+  }
 
   factory Event.fromJson(Map<String, dynamic> json) {
     return Event(
@@ -56,7 +90,15 @@ class Event {
       personId: json['person_id'],
       confidence: json['confidence']?.toDouble(),
       snapshotPath: json['snapshot_path'],
+      sensorPayload: json['sensor_payload'] is Map
+          ? Map<String, dynamic>.from(json['sensor_payload'])
+          : null,
       isAcknowledged: json['is_acknowledged'] ?? false,
+      lastSeenAt: json['last_seen_at'] == null
+          ? null
+          : DateTime.parse(json['last_seen_at']),
+      endedAt:
+          json['ended_at'] == null ? null : DateTime.parse(json['ended_at']),
       createdAt: DateTime.parse(json['created_at']),
     );
   }

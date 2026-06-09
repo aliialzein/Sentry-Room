@@ -57,7 +57,11 @@ class PiCameraStream:
             return self._latest_frame
 
     def mjpeg_frames(self) -> Iterator[bytes]:
+        settings = get_settings()
+        min_interval = 1.0 / max(settings.pi_camera_mjpeg_fps, 0.1)
         last_frame: bytes | None = None
+        last_sent_at = 0.0
+
         while not self._stop_event.is_set():
             with self._frame_condition:
                 self._frame_condition.wait(timeout=1.0)
@@ -66,7 +70,12 @@ class PiCameraStream:
             if frame is None or frame == last_frame:
                 continue
 
+            now = time.monotonic()
+            if now - last_sent_at < min_interval:
+                continue
+
             last_frame = frame
+            last_sent_at = now
             yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
 
     def _run_receiver(self) -> None:

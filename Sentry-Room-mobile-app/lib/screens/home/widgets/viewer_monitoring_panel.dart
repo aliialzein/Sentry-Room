@@ -10,11 +10,19 @@ class ViewerMonitoringPanel extends StatelessWidget {
   const ViewerMonitoringPanel({
     super.key,
     required this.isArmed,
+    required this.modeLabel,
+    required this.modeDescription,
+    required this.modeColor,
+    required this.modeIcon,
     required this.isSyncing,
     required this.onSync,
   });
 
   final bool isArmed;
+  final String modeLabel;
+  final String modeDescription;
+  final Color modeColor;
+  final IconData modeIcon;
   final bool isSyncing;
   final VoidCallback onSync;
 
@@ -32,6 +40,10 @@ class ViewerMonitoringPanel extends StatelessWidget {
           const SizedBox(height: 18),
           ArmDisarmControl(
             isArmed: isArmed,
+            modeLabel: modeLabel,
+            modeDescription: modeDescription,
+            modeColor: modeColor,
+            modeIcon: modeIcon,
             isReadOnly: true,
             onChanged: () {},
           ),

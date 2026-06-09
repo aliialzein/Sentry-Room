@@ -24,6 +24,12 @@ class SensorType(str, Enum):
     DISTANCE = "distance"
 
 
+class SecurityMode(str, Enum):
+    DISARMED = "disarmed"
+    WORKING_HOURS = "working_hours"
+    LOCKED = "locked"
+
+
 class AlertChannel(str, Enum):
     EMAIL = "email"
     APP = "app"

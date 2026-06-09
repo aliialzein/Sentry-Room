@@ -9,35 +9,38 @@ import 'panel_header.dart';
 const _accent = HomeColors.accent;
 const _success = HomeColors.success;
 const _warning = HomeColors.warning;
-const _danger = HomeColors.danger;
 
 class GlobalMonitoringPanel extends StatelessWidget {
   const GlobalMonitoringPanel({
     super.key,
     required this.notifyAllUsers,
     required this.isArmed,
+    required this.modeLabel,
+    required this.modeDescription,
+    required this.modeColor,
+    required this.modeIcon,
     required this.isSyncing,
     required this.isLocking,
     required this.onNotifyAllUsersChanged,
     required this.onToggleArmed,
     required this.onLockRoom,
-    required this.onPanicMode,
     required this.onSync,
     required this.onAlertSecurity,
-    required this.onLockdown,
   });
 
   final bool notifyAllUsers;
   final bool isArmed;
+  final String modeLabel;
+  final String modeDescription;
+  final Color modeColor;
+  final IconData modeIcon;
   final bool isSyncing;
   final bool isLocking;
   final ValueChanged<bool> onNotifyAllUsersChanged;
   final VoidCallback onToggleArmed;
   final VoidCallback onLockRoom;
-  final VoidCallback onPanicMode;
   final VoidCallback onSync;
   final VoidCallback onAlertSecurity;
-  final VoidCallback onLockdown;
 
   @override
   Widget build(BuildContext context) {
@@ -61,19 +64,23 @@ class GlobalMonitoringPanel extends StatelessWidget {
           const SizedBox(height: 18),
           ArmDisarmControl(
             isArmed: isArmed,
+            modeLabel: modeLabel,
+            modeDescription: modeDescription,
+            modeColor: modeColor,
+            modeIcon: modeIcon,
             onChanged: onToggleArmed,
           ),
           const SizedBox(height: 18),
           LayoutBuilder(
             builder: (context, constraints) {
-              final columns = constraints.maxWidth > 660 ? 5 : 2;
+              final columns = constraints.maxWidth > 660 ? 3 : 2;
               return GridView.count(
                 crossAxisCount: columns,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
-                childAspectRatio: columns == 5 ? 0.96 : 1.25,
+                childAspectRatio: columns == 3 ? 1.12 : 1.25,
                 children: [
                   ActionTile(
                     label: isLocking ? 'Locking' : 'Lock Room',
@@ -83,14 +90,6 @@ class GlobalMonitoringPanel extends StatelessWidget {
                     color: _accent,
                     tooltip: 'Lock the room door',
                     onPressed: isLocking ? null : onLockRoom,
-                  ),
-                  ActionTile(
-                    label: 'Panic Mode',
-                    icon: Icons.emergency_share_outlined,
-                    color: _danger,
-                    isPrimary: true,
-                    tooltip: 'Trigger panic mode confirmation',
-                    onPressed: onPanicMode,
                   ),
                   ActionTile(
                     label: isSyncing ? 'Syncing' : 'Sync',
@@ -107,13 +106,6 @@ class GlobalMonitoringPanel extends StatelessWidget {
                     color: _warning,
                     tooltip: 'Send emergency alert confirmation',
                     onPressed: onAlertSecurity,
-                  ),
-                  ActionTile(
-                    label: 'Lockdown',
-                    icon: Icons.gpp_maybe_rounded,
-                    color: _danger,
-                    tooltip: 'Start lockdown confirmation',
-                    onPressed: onLockdown,
                   ),
                 ],
               );

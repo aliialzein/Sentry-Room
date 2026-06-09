@@ -29,6 +29,13 @@ class EnrollImageRequest(BaseModel):
     notes: str | None = None
 
 
+class EnrollCameraRequest(BaseModel):
+    full_name: str = Field(..., min_length=1, max_length=120)
+    role: str | None = Field(default=None, max_length=80)
+    is_authorized: bool = True
+    notes: str | None = None
+
+
 class PersonRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

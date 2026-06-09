@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.enums import EventSeverity, EventType
 from app.models.event import AccessEvent
 from app.models.person import Person
+from app.services.face_index import face_index
 from app.services.notification import NotificationService
 from app.services.recognition import FaceRecognitionService, KnownFace
 from app.services.storage import save_bytes_file
@@ -58,12 +59,13 @@ class DetectionService:
                 snapshot_path=snapshot_path,
                 sensor_payload={
                     **base_sensor_payload,
-                    "unknown_face_encodings": unknown_encodings,
+                    "unknown_face_count": len(unknown_encodings),
                     "known_match_count": len(matches),
                 },
             )
             db.add(event)
             db.flush()
+            face_index.save_event_unknown_encodings(event.id, unknown_encodings)
             NotificationService().create_pending_alerts(db, event)
             return event
 
@@ -89,11 +91,11 @@ class DetectionService:
     @staticmethod
     def _known_authorized_faces(db: Session) -> list[KnownFace]:
         statement = select(Person).where(Person.is_authorized.is_(True))
-        people = db.scalars(statement)
+        people_by_id = {person.id: person for person in db.scalars(statement)}
         return [
-            KnownFace(name=person.full_name, encoding=person.face_encoding or [], person_id=person.id)
-            for person in people
-            if _is_valid_face_encoding(person.face_encoding)
+            KnownFace(name=people_by_id[indexed.person_id].full_name, encoding=indexed.encoding, person_id=indexed.person_id)
+            for indexed in face_index.load()
+            if indexed.person_id in people_by_id and _is_valid_face_encoding(indexed.encoding)
         ]
 
 

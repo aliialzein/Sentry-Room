@@ -76,6 +76,7 @@ class _CameraStreamViewState extends State<CameraStreamView> {
       await for (final chunk in response.stream) {
         if (!mounted || token != _streamToken) return;
         _buffer.addAll(chunk);
+        _trimOldCompleteFrames();
         _extractFrames();
       }
     } catch (e) {
@@ -88,11 +89,16 @@ class _CameraStreamViewState extends State<CameraStreamView> {
   }
 
   void _extractFrames() {
+    Uint8List? newestFrame;
+
     while (true) {
       final start = _indexOfJpegStart(_buffer);
       if (start == -1) {
         if (_buffer.length > 65536) {
           _buffer.removeRange(0, _buffer.length - 4096);
+        }
+        if (newestFrame != null) {
+          _showFrame(newestFrame);
         }
         return;
       }
@@ -102,19 +108,58 @@ class _CameraStreamViewState extends State<CameraStreamView> {
       }
 
       final end = _indexOfJpegEnd(_buffer, 2);
-      if (end == -1) return;
+      if (end == -1) {
+        if (newestFrame != null) {
+          _showFrame(newestFrame);
+        }
+        return;
+      }
 
-      final frame = Uint8List.fromList(_buffer.sublist(0, end + 2));
+      newestFrame = Uint8List.fromList(_buffer.sublist(0, end + 2));
       _buffer.removeRange(0, end + 2);
+    }
+  }
 
-      if (mounted) {
-        setState(() {
-          _latestFrame = frame;
-          _isConnecting = false;
-          _errorMessage = null;
-        });
+  void _trimOldCompleteFrames() {
+    while (true) {
+      final firstStart = _indexOfJpegStart(_buffer);
+      if (firstStart == -1) {
+        if (_buffer.length > 65536) {
+          _buffer.removeRange(0, _buffer.length - 4096);
+        }
+        return;
+      }
+
+      if (firstStart > 0) {
+        _buffer.removeRange(0, firstStart);
+      }
+
+      final firstEnd = _indexOfJpegEnd(_buffer, 2);
+      if (firstEnd == -1) return;
+
+      final nextStart = _indexOfJpegStartFrom(_buffer, firstEnd + 2);
+      if (nextStart == -1) return;
+
+      _buffer.removeRange(0, nextStart);
+    }
+  }
+
+  void _showFrame(Uint8List frame) {
+    if (!mounted) return;
+    setState(() {
+      _latestFrame = frame;
+      _isConnecting = false;
+      _errorMessage = null;
+    });
+  }
+
+  int _indexOfJpegStartFrom(List<int> bytes, int startIndex) {
+    for (var index = startIndex; index < bytes.length - 1; index++) {
+      if (bytes[index] == 0xFF && bytes[index + 1] == 0xD8) {
+        return index;
       }
     }
+    return -1;
   }
 
   int _indexOfJpegStart(List<int> bytes) {

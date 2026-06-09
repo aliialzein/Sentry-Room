@@ -35,6 +35,11 @@ def camera_stream() -> StreamingResponse:
     return StreamingResponse(
         pi_camera_stream.mjpeg_frames(),
         media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate, no-transform",
+            "Pragma": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

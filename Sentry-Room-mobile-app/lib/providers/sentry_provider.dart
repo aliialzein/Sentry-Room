@@ -17,6 +17,7 @@ class SentryProvider with ChangeNotifier {
   Map<String, dynamic> _liveStatus = {};
   bool _isLoading = false;
   bool _notifyAllUsers = false;
+  String _securityMode = 'working_hours';
   String? _lastActionError;
 
   final Set<int> _seenEventIds = {};
@@ -28,6 +29,8 @@ class SentryProvider with ChangeNotifier {
   Map<String, dynamic> get liveStatus => _liveStatus;
   bool get isLoading => _isLoading;
   bool get notifyAllUsers => _notifyAllUsers;
+  String get securityMode => _securityMode;
+  bool get isArmed => _securityMode != 'disarmed';
   String? get lastActionError => _lastActionError;
 
   SentryProvider() {
@@ -55,6 +58,8 @@ class SentryProvider with ChangeNotifier {
       final newEvents = results[0] as List<Event>;
       _persons = results[1] as List<Person>;
       _liveStatus = results[2] as Map<String, dynamic>;
+      _securityMode =
+          _liveStatus['security_mode']?.toString() ?? _securityMode;
 
       _processNewEvents(newEvents);
       _events = newEvents;
@@ -113,6 +118,24 @@ class SentryProvider with ChangeNotifier {
     });
   }
 
+  Future<bool> updateSecurityMode(String mode) async {
+    try {
+      _lastActionError = null;
+      final response = await _apiService.updateSecurityMode(mode);
+      _securityMode = response['mode']?.toString() ?? mode;
+      _liveStatus = {
+        ..._liveStatus,
+        'security_mode': _securityMode,
+      };
+      notifyListeners();
+      return true;
+    } catch (error) {
+      _lastActionError = _cleanError(error);
+      debugPrint('Error updating security mode: $_lastActionError');
+      return false;
+    }
+  }
+
   void _notifyForEvent(
     int id,
     String eventType,
@@ -168,6 +191,19 @@ class SentryProvider with ChangeNotifier {
     } catch (error) {
       _lastActionError = _cleanError(error);
       debugPrint('Error creating person: $_lastActionError');
+      return false;
+    }
+  }
+
+  Future<bool> enrollPersonFromCamera(String fullName, String? role) async {
+    try {
+      _lastActionError = null;
+      await _apiService.enrollPersonFromCamera(fullName, role);
+      await refreshData();
+      return true;
+    } catch (error) {
+      _lastActionError = _cleanError(error);
+      debugPrint('Error enrolling person from camera: $_lastActionError');
       return false;
     }
   }

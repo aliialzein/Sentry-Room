@@ -8,6 +8,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from app.core.database import SessionLocal
 from app.models.person import Person
+from app.services.face_index import face_index
 from app.services.face_store import LegacyFaceStore
 
 
@@ -26,10 +27,11 @@ def main() -> None:
             person = Person(
                 full_name=record.name,
                 is_authorized=True,
-                face_encoding=record.encoding,
                 notes="Imported from legacy faces_db.pkl.",
             )
             db.add(person)
+            db.flush()
+            face_index.add_person_encoding(person.id, record.encoding)
             existing_names.add(record.name)
             imported += 1
         db.commit()

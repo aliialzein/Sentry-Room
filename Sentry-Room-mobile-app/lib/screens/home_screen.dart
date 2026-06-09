@@ -59,7 +59,6 @@ class _HomeScreenState extends State<HomeScreen> {
   DateTime _now = DateTime.now();
   DateTime? _lastSyncAt;
   int? _activeAlertEventId;
-  bool _isArmed = true;
   bool _isSyncing = false;
   bool _isRecording = false;
   bool _isSnapshotLoading = false;
@@ -130,6 +129,7 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (_) => _UnauthorizedEntryDialog(
           event: unauthorizedEvent!,
           isAdmin: auth.isAdmin,
+          canAddPerson: unauthorizedEvent!.hasCapturedUnknownFace,
         ),
       );
 
@@ -202,7 +202,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final activeAlerts = _activeAlertCount(sentry);
     final connection = _connectionStatus(sentry);
     final systemColor =
-        activeAlerts > 0 ? _danger : (_isArmed ? _success : _warning);
+        activeAlerts > 0 ? _danger : _securityModeColor(sentry.securityMode);
     final userName = auth.fullName ?? auth.username ?? 'Operator';
 
     _queueUnauthorizedAlert(context, sentry, auth);
@@ -226,11 +226,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           HomeHeader(
                             statusLabel: activeAlerts > 0
                                 ? '$activeAlerts active alert${activeAlerts == 1 ? '' : 's'}'
-                                : (_isArmed ? 'System armed' : 'System disarmed'),
+                                : _securityModeLabel(sentry.securityMode),
                             statusColor: systemColor,
                             statusIcon: activeAlerts > 0
                                 ? Icons.report_problem_rounded
-                                : Icons.verified_user_rounded,
+                                : _securityModeIcon(sentry.securityMode),
                             connectionLabel: connection.label,
                             connectionColor: connection.color,
                             connectionIcon: connection.icon,
@@ -290,7 +290,11 @@ class _HomeScreenState extends State<HomeScreen> {
         final commandPanel = auth.isAdmin
             ? GlobalMonitoringPanel(
                 notifyAllUsers: sentry.notifyAllUsers,
-                isArmed: _isArmed,
+                isArmed: sentry.isArmed,
+                modeLabel: _securityModeLabel(sentry.securityMode),
+                modeDescription: _securityModeDescription(sentry.securityMode),
+                modeColor: _securityModeColor(sentry.securityMode),
+                modeIcon: _securityModeIcon(sentry.securityMode),
                 isSyncing: _isSyncing,
                 isLocking: _isLocking,
                 onNotifyAllUsersChanged: (value) {
@@ -309,37 +313,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         : 'Monitoring notifications muted.',
                   );
                 },
-                onToggleArmed: () {
-                  setState(() => _isArmed = !_isArmed);
-                  _addLocalActivity(
-                    _isArmed ? 'System armed' : 'System disarmed',
-                    _isArmed
-                        ? 'Sensors and alerts are active.'
-                        : 'Security monitoring is in standby.',
-                    _isArmed ? 'info' : 'warning',
-                    _isArmed ? Icons.shield_rounded : Icons.shield_outlined,
-                  );
-                  _showFeedback(_isArmed ? 'System armed.' : 'System disarmed.');
-                },
+                onToggleArmed: () => _toggleSecurityMode(sentry),
                 onLockRoom: () => _confirmAndRun(
                   title: 'Lock room?',
                   message:
                       'This will mark the room as locked in the command center. Connect this to the door lock API when hardware control ready.',
                   confirmLabel: 'Lock Room',
                   color: _warning,
-                  onConfirm: _lockRoom,
-                ),
-                onPanicMode: () => _confirmAndRun(
-                  title: 'Trigger panic mode?',
-                  message:
-                      'Panic Mode should notify security and mark the room as critical. This dashboard action is currently mocked until an emergency endpoint is connected.',
-                  confirmLabel: 'Trigger',
-                  color: _danger,
-                  onConfirm: () => _mockEmergencyAction(
-                    'Panic mode triggered',
-                    'Security escalation placeholder was activated.',
-                    Icons.emergency_share_rounded,
-                  ),
+                  onConfirm: () {
+                    _setSecurityMode(sentry, 'locked');
+                  },
                 ),
                 onSync: () => _syncNow(sentry),
                 onAlertSecurity: () => _confirmAndRun(
@@ -354,21 +337,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     Icons.support_agent_rounded,
                   ),
                 ),
-                onLockdown: () => _confirmAndRun(
-                  title: 'Start lockdown?',
-                  message:
-                      'Lockdown is a critical action. This visual control is ready for a future backend endpoint.',
-                  confirmLabel: 'Lockdown',
-                  color: _danger,
-                  onConfirm: () => _mockEmergencyAction(
-                    'Lockdown started',
-                    'Critical lockdown placeholder was activated.',
-                    Icons.gpp_maybe_rounded,
-                  ),
-                ),
               )
             : ViewerMonitoringPanel(
-                isArmed: _isArmed,
+                isArmed: sentry.isArmed,
+                modeLabel: _securityModeLabel(sentry.securityMode),
+                modeDescription: _securityModeDescription(sentry.securityMode),
+                modeColor: _securityModeColor(sentry.securityMode),
+                modeIcon: _securityModeIcon(sentry.securityMode),
                 isSyncing: _isSyncing,
                 onSync: () => _syncNow(sentry),
               );
@@ -415,7 +390,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           .where((person) => person.isAuthorized)
                           .length,
                       totalPeople: sentry.persons.length,
-                      isArmed: _isArmed,
+                      isArmed: sentry.isArmed,
                       onAddVisitor: () {
                         _showFeedback(
                             'Visitor enrollment form opens from Manage Access.');
@@ -435,7 +410,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         .where((person) => person.isAuthorized)
                         .length,
                     totalPeople: sentry.persons.length,
-                    isArmed: _isArmed,
+                    isArmed: sentry.isArmed,
                     onAddVisitor: () {
                       _showFeedback(
                           'Visitor enrollment form opens from Manage Access.');
@@ -629,22 +604,29 @@ class _HomeScreenState extends State<HomeScreen> {
     _showFeedback('Dashboard synced.');
   }
 
-  Future<void> _lockRoom() async {
+  Future<void> _setSecurityMode(SentryProvider sentry, String mode) async {
     setState(() => _isLocking = true);
-    await Future<void>.delayed(const Duration(milliseconds: 650));
+    final success = await sentry.updateSecurityMode(mode);
     if (!mounted) return;
-    setState(() {
-      _isLocking = false;
-      _isArmed = true;
-    });
+    setState(() => _isLocking = false);
+
+    if (!success) {
+      _showFeedback(sentry.lastActionError ?? 'Failed to update mode.');
+      return;
+    }
+
     _addLocalActivity(
-      'Door locked',
-      'Primary room lock command completed locally.',
+      'Mode changed',
+      'Security mode set to ${_securityModeLabel(mode)}.',
       'info',
-      Icons.lock_rounded,
+      _securityModeIcon(mode),
     );
-    _showFeedback('Room marked as locked.');
-    // TODO: Connect this action to the physical door-lock backend endpoint.
+    _showFeedback('Mode set to ${_securityModeLabel(mode)}.');
+  }
+
+  void _toggleSecurityMode(SentryProvider sentry) {
+    final nextMode = sentry.isArmed ? 'disarmed' : 'working_hours';
+    _setSecurityMode(sentry, nextMode);
   }
 
   Future<void> _takeSnapshot() async {
@@ -833,6 +815,55 @@ class _HomeScreenState extends State<HomeScreen> {
     if (type.contains('environment')) return Icons.thermostat_rounded;
     return Icons.info_outline_rounded;
   }
+
+  String _securityModeLabel(String mode) {
+    switch (mode) {
+      case 'disarmed':
+        return 'System disarmed';
+      case 'locked':
+        return 'Room locked';
+      case 'working_hours':
+      default:
+        return 'Working hours';
+    }
+  }
+
+  String _securityModeDescription(String mode) {
+    switch (mode) {
+      case 'disarmed':
+        return 'Setup mode. Alerts are visible, but active response is paused.';
+      case 'locked':
+        return 'Room closed. Person activity should be treated as suspicious.';
+      case 'working_hours':
+      default:
+        return 'Daytime monitoring with reduced alert noise.';
+    }
+  }
+
+  IconData _securityModeIcon(String mode) {
+    switch (mode) {
+      case 'disarmed':
+        return Icons.shield_outlined;
+      case 'locked':
+        return Icons.lock_rounded;
+      case 'working_hours':
+      default:
+        return Icons.shield_rounded;
+    }
+  }
+
+  Color _securityModeColor(String mode) {
+    switch (mode) {
+      case 'disarmed':
+        return _warning;
+      case 'working_hours':
+        return _success;
+      case 'locked':
+        return _accent;
+      default:
+        return _success;
+    }
+  }
 }
 
 class _ConnectionStatus {
@@ -850,10 +881,12 @@ class _ConnectionStatus {
 class _UnauthorizedEntryDialog extends StatefulWidget {
   final Event event;
   final bool isAdmin;
+  final bool canAddPerson;
 
   const _UnauthorizedEntryDialog({
     required this.event,
     required this.isAdmin,
+    required this.canAddPerson,
   });
 
   @override
@@ -1059,11 +1092,11 @@ class _UnauthorizedEntryDialogState extends State<_UnauthorizedEntryDialog> {
         onPressed: _acknowledgeOnly,
         child: const Text('Acknowledge Only'),
       ),
-      if (widget.isAdmin)
+      if (widget.isAdmin && widget.canAddPerson)
         ElevatedButton.icon(
           onPressed: () => setState(() => _showAuthorizeForm = true),
           icon: const Icon(Icons.person_add_alt_1_rounded),
-          label: const Text('Authorize This Person'),
+          label: const Text('Add Authorized Person'),
         ),
     ];
   }

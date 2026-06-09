@@ -10,6 +10,8 @@ from app.schemas.event import AuthorizeEventPersonRequest, DetectionRequest, Eve
 from app.schemas.person import PersonRead
 from app.services.detection import DetectionService
 from app.services.event_messages import websocket_event_message
+from app.services.face_duplicates import find_existing_face_match
+from app.services.face_index import face_index
 from app.services.notification import NotificationService
 from app.services.storage import decode_base64_payload, save_bytes_file
 from app.services.websocket_manager import manager
@@ -106,20 +108,30 @@ def authorize_person_from_event(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only unauthorized events can be authorized")
 
     sensor_payload = event.sensor_payload or {}
-    unknown_encodings = sensor_payload.get("unknown_face_encodings") or []
+    unknown_encodings = face_index.load_event_unknown_encodings(event.id)
+    if not unknown_encodings:
+        unknown_encodings = sensor_payload.get("unknown_face_encodings") or []
     if not unknown_encodings:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Event has no captured unknown face encoding")
+
+    duplicate = find_existing_face_match(db, unknown_encodings[0])
+    if duplicate is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"This face is already enrolled as {duplicate.name} (person {duplicate.person_id}).",
+        )
 
     person = Person(
         full_name=payload.full_name,
         role=payload.role,
         is_authorized=True,
-        face_encoding=unknown_encodings[0],
+        face_encoding=None,
         image_path=event.snapshot_path,
         notes=payload.notes or f"Authorized from event {event.id}.",
     )
     db.add(person)
     db.flush()
+    face_index.add_person_encoding(person.id, unknown_encodings[0])
 
     event.person_id = person.id
     event.is_acknowledged = True
