@@ -35,6 +35,12 @@ enum _UnauthorizedAlertResult {
   authorized,
 }
 
+enum _FireAlertResult {
+  acknowledged,
+  openEmergency,
+  viewEvents,
+}
+
 class _CommandActivity {
   final String title;
   final String detail;
@@ -53,6 +59,7 @@ class _CommandActivity {
 
 class _HomeScreenState extends State<HomeScreen> {
   final Set<int> _alertedUnauthorizedEventIds = {};
+  final Set<int> _alertedFireEventIds = {};
   final List<_CommandActivity> _localActivity = [];
 
   Timer? _clockTimer;
@@ -153,6 +160,54 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  void _queueFireAlert(BuildContext context, SentryProvider sentry) {
+    if (_activeAlertEventId != null) return;
+
+    Event? fireEvent;
+    for (final event in sentry.events) {
+      if (event.isFireRiskEvent &&
+          !event.isAcknowledged &&
+          !_alertedFireEventIds.contains(event.id)) {
+        fireEvent = event;
+        break;
+      }
+    }
+
+    if (fireEvent == null) return;
+
+    _activeAlertEventId = fireEvent.id;
+    _alertedFireEventIds.add(fireEvent.id);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
+      final messenger = ScaffoldMessenger.of(context);
+      final result = await showDialog<_FireAlertResult>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _FireRiskDialog(event: fireEvent!),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        if (_activeAlertEventId == fireEvent!.id) {
+          _activeAlertEventId = null;
+        }
+      });
+
+      if (result == _FireAlertResult.acknowledged) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Fire alert acknowledged.')),
+        );
+      } else if (result == _FireAlertResult.openEmergency) {
+        _openEmergency(context);
+      } else if (result == _FireAlertResult.viewEvents) {
+        _openEvents(context);
+      }
+    });
+  }
+
   void _openCamera(BuildContext context) {
     Navigator.push(
       context,
@@ -205,6 +260,7 @@ class _HomeScreenState extends State<HomeScreen> {
         activeAlerts > 0 ? _danger : _securityModeColor(sentry.securityMode);
     final userName = auth.fullName ?? auth.username ?? 'Operator';
 
+    _queueFireAlert(context, sentry);
     _queueUnauthorizedAlert(context, sentry, auth);
 
     return Scaffold(
@@ -289,7 +345,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
         final commandPanel = auth.isAdmin
             ? GlobalMonitoringPanel(
-                notifyAllUsers: sentry.notifyAllUsers,
                 isArmed: sentry.isArmed,
                 modeLabel: _securityModeLabel(sentry.securityMode),
                 modeDescription: _securityModeDescription(sentry.securityMode),
@@ -297,22 +352,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 modeIcon: _securityModeIcon(sentry.securityMode),
                 isSyncing: _isSyncing,
                 isLocking: _isLocking,
-                onNotifyAllUsersChanged: (value) {
-                  sentry.setNotifyAllUsers(value);
-                  _addLocalActivity(
-                    value
-                        ? 'Monitoring notifications enabled'
-                        : 'Monitoring notifications muted',
-                    'Operator changed global notification routing.',
-                    'info',
-                    Icons.notifications_active_rounded,
-                  );
-                  _showFeedback(
-                    value
-                        ? 'Monitoring notifications enabled.'
-                        : 'Monitoring notifications muted.',
-                  );
-                },
                 onToggleArmed: () => _toggleSecurityMode(sentry),
                 onLockRoom: () => _confirmAndRun(
                   title: 'Lock room?',
@@ -444,13 +483,11 @@ class _HomeScreenState extends State<HomeScreen> {
   ) {
     final readings = sentry.liveStatus['latest_readings'] as Map? ?? {};
     final env = readings['temperature_humidity'] as Map? ?? {};
-    final distance = readings['distance'] as Map? ?? {};
     final temperature = _readNumber(env['temperature_c']);
     final humidity = _readNumber(env['humidity_percent']);
-    final roomRange = _readNumber(distance['distance_cm']);
     final activeAlerts = _activeAlertCount(sentry);
     final columns = availableWidth >= 1050
-        ? 4
+        ? 3
         : availableWidth >= 640
             ? 2
             : 1;
@@ -501,18 +538,6 @@ class _HomeScreenState extends State<HomeScreen> {
               minLabel: '30',
               maxLabel: '70',
               progress: _progressFromRange(humidity, 0, 100),
-            ),
-            StatusMetricCard(
-              title: 'Motion Range',
-              value: roomRange == null ? '--' : roomRange.toStringAsFixed(0),
-              unit: 'cm',
-              icon: Icons.sensors_rounded,
-              color: _metricColor(_distanceState(roomRange)),
-              state: _distanceState(roomRange),
-              helper: 'Alert below 30 cm',
-              minLabel: '30',
-              maxLabel: '120',
-              progress: _progressFromRange(roomRange, 0, 160),
             ),
             StatusMetricCard(
               title: 'Security Alerts',
@@ -571,7 +596,7 @@ class _HomeScreenState extends State<HomeScreen> {
             detail: event.message,
             time: event.createdAt,
             severity: event.severity,
-            icon: _eventIcon(event.eventType, event.severity),
+            icon: _eventIcon(event),
             statusLabel: event.isAcknowledged ? 'Ack' : 'Open',
           ),
       ]);
@@ -772,13 +797,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return MetricState.normal;
   }
 
-  MetricState _distanceState(double? value) {
-    if (value == null) return MetricState.standby;
-    if (value < 30) return MetricState.critical;
-    if (value < 60) return MetricState.warning;
-    return MetricState.normal;
-  }
-
   double _progressFromRange(double? value, double min, double max) {
     if (value == null) return 0;
     return ((value - min) / (max - min)).clamp(0, 1).toDouble();
@@ -798,21 +816,34 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   String _eventTitle(Event event) {
-    return event.eventType
-        .split('_')
-        .map((part) => part.isEmpty
-            ? part
-            : '${part[0].toUpperCase()}${part.substring(1)}')
-        .join(' ');
+    return event.displayTypeLabel;
   }
 
-  IconData _eventIcon(String type, String severity) {
-    if (severity == 'critical' || type.contains('unauthorized')) {
+  IconData _eventIcon(Event event) {
+    switch (event.identityCategory) {
+      case 'authorized_person':
+        return Icons.verified_user_rounded;
+      case 'no_face':
+        return Icons.visibility_off_rounded;
+      case 'unknown_face':
+        return Icons.person_search_rounded;
+      case 'fire_warning':
+      case 'fire_emergency':
+        return Icons.local_fire_department_rounded;
+      case 'unauthorized_person':
+      case 'unauthorized_entry':
+        return Icons.gpp_maybe_rounded;
+    }
+
+    if (event.severity == 'critical' ||
+        event.eventType.contains('unauthorized')) {
       return Icons.security_rounded;
     }
-    if (type.contains('authorized')) return Icons.login_rounded;
-    if (type.contains('motion')) return Icons.sensors_rounded;
-    if (type.contains('environment')) return Icons.thermostat_rounded;
+    if (event.eventType.contains('authorized')) return Icons.login_rounded;
+    if (event.eventType.contains('motion')) return Icons.sensors_rounded;
+    if (event.eventType.contains('environment')) {
+      return Icons.thermostat_rounded;
+    }
     return Icons.info_outline_rounded;
   }
 
@@ -876,6 +907,189 @@ class _ConnectionStatus {
     required this.color,
     required this.icon,
   });
+}
+
+class _FireRiskDialog extends StatefulWidget {
+  final Event event;
+
+  const _FireRiskDialog({required this.event});
+
+  @override
+  State<_FireRiskDialog> createState() => _FireRiskDialogState();
+}
+
+class _FireRiskDialogState extends State<_FireRiskDialog> {
+  bool _isSubmitting = false;
+  String? _errorMessage;
+
+  Future<void> _acknowledge() async {
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+
+    final sentry = context.read<SentryProvider>();
+    final success = await sentry.acknowledgeEvent(widget.event.id);
+
+    if (!mounted) return;
+
+    if (success) {
+      Navigator.of(context).pop(_FireAlertResult.acknowledged);
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = false;
+      _errorMessage = sentry.lastActionError ??
+          'Failed to acknowledge fire alert. Please try again.';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final emergency = widget.event.isFireEmergency;
+    final color = emergency ? _danger : _warning;
+    final trigger = _triggerPayload(widget.event);
+
+    return AlertDialog(
+      icon: Icon(
+        emergency
+            ? Icons.local_fire_department_rounded
+            : Icons.warning_amber_rounded,
+        color: color,
+        size: 50,
+      ),
+      title: Text(
+        widget.event.displayTypeLabel,
+        textAlign: TextAlign.center,
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.event.fireReason,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 16),
+            _FireDetailRow(
+              label: 'Temperature',
+              value: _valueWithUnit(trigger['temperature_c'], 'C'),
+            ),
+            _FireDetailRow(
+              label: 'Humidity',
+              value: _valueWithUnit(trigger['humidity_percent'], '%'),
+            ),
+            _FireDetailRow(
+              label: 'Light',
+              value: _plainValue(trigger['light_value']),
+            ),
+            _FireDetailRow(
+              label: 'Trigger',
+              value: _plainValue(trigger['trigger_reason']),
+            ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: color),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: _buildActions(emergency),
+    );
+  }
+
+  List<Widget> _buildActions(bool emergency) {
+    if (_isSubmitting) {
+      return const [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      ];
+    }
+
+    return [
+      TextButton(
+        onPressed: _acknowledge,
+        child: const Text('Acknowledge'),
+      ),
+      ElevatedButton.icon(
+        onPressed: () => Navigator.of(context).pop(
+          emergency ? _FireAlertResult.openEmergency : _FireAlertResult.viewEvents,
+        ),
+        icon: Icon(
+          emergency
+              ? Icons.local_fire_department_rounded
+              : Icons.history_rounded,
+        ),
+        label: Text(emergency ? 'Open Fire Emergency' : 'View Events'),
+      ),
+    ];
+  }
+
+  Map<String, dynamic> _triggerPayload(Event event) {
+    final trigger = event.fireRiskDetails['trigger'];
+    if (trigger is Map<String, dynamic>) return trigger;
+    if (trigger is Map) return Map<String, dynamic>.from(trigger);
+    return {};
+  }
+
+  String _valueWithUnit(dynamic value, String unit) {
+    if (value == null) return 'Unavailable';
+    if (value is num) return '${value.toStringAsFixed(value % 1 == 0 ? 0 : 1)}$unit';
+    return '$value$unit';
+  }
+
+  String _plainValue(dynamic value) {
+    if (value == null) return 'Unavailable';
+    return value.toString();
+  }
+}
+
+class _FireDetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _FireDetailRow({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$label: ',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(color: Colors.white70),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _UnauthorizedEntryDialog extends StatefulWidget {
@@ -971,14 +1185,16 @@ class _UnauthorizedEntryDialogState extends State<_UnauthorizedEntryDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final alertColor = _alertColor(widget.event.identityCategory);
+
     return AlertDialog(
-      icon: const Icon(
-        Icons.gpp_maybe_rounded,
-        color: _danger,
+      icon: Icon(
+        _alertIcon(widget.event.identityCategory),
+        color: alertColor,
         size: 48,
       ),
-      title: const Text(
-        'Unauthorized Entry',
+      title: Text(
+        widget.event.displayTypeLabel,
         textAlign: TextAlign.center,
       ),
       content: SingleChildScrollView(
@@ -996,7 +1212,7 @@ class _UnauthorizedEntryDialogState extends State<_UnauthorizedEntryDialog> {
               Text(
                 _errorMessage!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: _danger),
+                style: TextStyle(color: alertColor),
               ),
             ],
             if (_showAuthorizeForm) ...[
@@ -1057,6 +1273,33 @@ class _UnauthorizedEntryDialogState extends State<_UnauthorizedEntryDialog> {
       ),
       actions: _buildActions(),
     );
+  }
+
+  Color _alertColor(String category) {
+    switch (category) {
+      case 'no_face':
+        return _warning;
+      case 'unknown_face':
+      case 'unauthorized_person':
+      case 'unauthorized_entry':
+        return _danger;
+      default:
+        return _danger;
+    }
+  }
+
+  IconData _alertIcon(String category) {
+    switch (category) {
+      case 'no_face':
+        return Icons.visibility_off_rounded;
+      case 'unknown_face':
+        return Icons.person_search_rounded;
+      case 'unauthorized_person':
+      case 'unauthorized_entry':
+        return Icons.gpp_maybe_rounded;
+      default:
+        return Icons.gpp_maybe_rounded;
+    }
   }
 
   List<Widget> _buildActions() {

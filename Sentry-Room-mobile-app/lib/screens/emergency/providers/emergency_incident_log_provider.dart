@@ -103,11 +103,7 @@ class EmergencyIncidentLogProvider extends ChangeNotifier {
     }
   }
 
-  Future<int> syncPendingIncidents({required String? authToken}) async {
-    if (authToken == null || authToken.isEmpty) {
-      throw Exception('Authentication token is required to sync incidents.');
-    }
-
+  Future<int> syncPendingIncidents({String? authToken}) async {
     final pendingLogs = _logs.where((log) => !log.isSynced).toList();
     if (pendingLogs.isEmpty) {
       return 0;

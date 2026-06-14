@@ -9,8 +9,7 @@ from app.schemas.analytics import (
     AnalyticsTrendPoint,
     AnalyticsTypeCount,
 )
-from app.api.deps import get_current_user, get_db
-from app.models.user import User
+from app.api.deps import get_db
 from app.services.analytics import AnalyticsService
 
 router = APIRouter()
@@ -27,7 +26,6 @@ def _service_error(exc: SQLAlchemyError) -> HTTPException:
 def get_analytics_summary(
     analytics_range: AnalyticsRange = Query(default=AnalyticsRange.DAILY, alias="range"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> AnalyticsSummary:
     try:
         return AnalyticsService().get_summary(db=db, analytics_range=analytics_range)
@@ -39,7 +37,6 @@ def get_analytics_summary(
 def get_analytics_trends(
     analytics_range: AnalyticsRange = Query(default=AnalyticsRange.DAILY, alias="range"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> list[AnalyticsTrendPoint]:
     try:
         return AnalyticsService().get_trends(db=db, analytics_range=analytics_range)
@@ -51,7 +48,6 @@ def get_analytics_trends(
 def get_analytics_by_type(
     analytics_range: AnalyticsRange = Query(default=AnalyticsRange.DAILY, alias="range"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> list[AnalyticsTypeCount]:
     try:
         return AnalyticsService().get_counts_by_type(db=db, analytics_range=analytics_range)
@@ -63,7 +59,6 @@ def get_analytics_by_type(
 def get_analytics_by_action(
     analytics_range: AnalyticsRange = Query(default=AnalyticsRange.DAILY, alias="range"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> list[AnalyticsActionCount]:
     try:
         return AnalyticsService().get_counts_by_action(db=db, analytics_range=analytics_range)

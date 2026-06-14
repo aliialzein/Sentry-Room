@@ -67,12 +67,6 @@ class AnalyticsProvider extends ChangeNotifier {
   }
 
   Future<void> loadAnalytics({required String? authToken}) async {
-    if (authToken == null || authToken.isEmpty) {
-      _errorMessage = 'Authentication token is required to load analytics.';
-      notifyListeners();
-      return;
-    }
-
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();

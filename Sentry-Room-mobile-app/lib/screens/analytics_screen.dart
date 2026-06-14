@@ -66,14 +66,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Future<void> _loadAiSummary(AnalyticsRange range) async {
     final authToken = context.read<AuthProvider>().token;
 
-    if (authToken == null || authToken.isEmpty) {
-      setState(() {
-        _aiSummary = null;
-        _aiError = 'Sign in again to load AI summaries.';
-      });
-      return;
-    }
-
     setState(() {
       _isAiLoading = true;
       _aiError = null;

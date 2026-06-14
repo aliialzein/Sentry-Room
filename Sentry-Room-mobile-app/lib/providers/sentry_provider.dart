@@ -16,7 +16,6 @@ class SentryProvider with ChangeNotifier {
   List<Person> _persons = [];
   Map<String, dynamic> _liveStatus = {};
   bool _isLoading = false;
-  bool _notifyAllUsers = false;
   String _securityMode = 'working_hours';
   String? _lastActionError;
 
@@ -28,7 +27,6 @@ class SentryProvider with ChangeNotifier {
   List<Person> get persons => _persons;
   Map<String, dynamic> get liveStatus => _liveStatus;
   bool get isLoading => _isLoading;
-  bool get notifyAllUsers => _notifyAllUsers;
   String get securityMode => _securityMode;
   bool get isArmed => _securityMode != 'disarmed';
   String? get lastActionError => _lastActionError;
@@ -37,11 +35,6 @@ class SentryProvider with ChangeNotifier {
     refreshData();
     startPolling();
     startLiveAlerts();
-  }
-
-  void setNotifyAllUsers(bool value) {
-    _notifyAllUsers = value;
-    notifyListeners();
   }
 
   Future<void> refreshData() async {
@@ -88,6 +81,7 @@ class SentryProvider with ChangeNotifier {
         event.eventType,
         event.severity,
         event.message,
+        title: event.displayTypeLabel,
       );
     }
   }
@@ -140,12 +134,23 @@ class SentryProvider with ChangeNotifier {
     int id,
     String eventType,
     String severity,
-    String message,
-  ) {
+    String message, {
+    String? title,
+  }) {
     if (eventType == 'unauthorized_entry') {
       NotificationService.showNotification(
         id: id,
-        title: 'Security Alert',
+        title: title ?? 'Security Alert',
+        body: message,
+      );
+      return;
+    }
+
+    if (eventType == 'environmental_alert' &&
+        (severity == 'warning' || severity == 'critical')) {
+      NotificationService.showNotification(
+        id: id,
+        title: title ?? 'Environmental Alert',
         body: message,
       );
       return;
@@ -160,13 +165,6 @@ class SentryProvider with ChangeNotifier {
       return;
     }
 
-    if (eventType == 'authorized_entry' && _notifyAllUsers) {
-      NotificationService.showNotification(
-        id: id,
-        title: 'Entry Detected',
-        body: message,
-      );
-    }
   }
 
   Future<bool> acknowledgeEvent(int eventId) async {

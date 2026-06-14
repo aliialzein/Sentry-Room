@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../constants/api_constants.dart';
 import '../widgets/home_colors.dart';
 import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
 import 'events_screen.dart';
 import 'people_screen.dart';
 import 'profile_screen.dart';
@@ -23,41 +25,268 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final ApiService _apiService = ApiService(ApiConstants.baseUrl);
+  final TextEditingController _noFacePromptController =
+      TextEditingController();
+  final TextEditingController _unknownFacePromptController =
+      TextEditingController();
+  final TextEditingController _knownPersonPromptController =
+      TextEditingController();
+  final TextEditingController _aiTimeoutController =
+      TextEditingController(text: '10');
+  final TextEditingController _aiMaxWordsController =
+      TextEditingController(text: '10');
+  final TextEditingController _reportEmailController =
+      TextEditingController();
+  final TextEditingController _reportTimeController =
+      TextEditingController(text: '23:00');
+
   bool _isSaving = false;
+  bool _isLoadingAiAlerts = false;
+  bool _isSavingAiAlerts = false;
+  bool _isLoadingDailyReport = false;
+  bool _isSavingDailyReport = false;
+  bool _isSendingDailyReport = false;
+  bool _aiAlertsEnabled = true;
+  String? _aiAlertError;
+  String? _dailyReportError;
+  String _reportTimezone = 'Asia/Beirut';
 
-  Future<void> _updateSettings({
-    bool? criticalAlerts,
-    bool? cameraAlerts,
-    bool? eventNotifications,
-    bool? compactDashboard,
-    bool? saveActivityLocally,
-  }) async {
-    final auth = context.read<AuthProvider>();
+  @override
+  void initState() {
+    super.initState();
+    _loadAiAlertSettings();
+    _loadDailyReportSettings();
+  }
 
-    setState(() => _isSaving = true);
+  @override
+  void dispose() {
+    _noFacePromptController.dispose();
+    _unknownFacePromptController.dispose();
+    _knownPersonPromptController.dispose();
+    _aiTimeoutController.dispose();
+    _aiMaxWordsController.dispose();
+    _reportEmailController.dispose();
+    _reportTimeController.dispose();
+    super.dispose();
+  }
 
-    final success = await auth.updateSettings(
-      criticalAlerts: criticalAlerts ?? auth.criticalAlerts,
-      cameraAlerts: cameraAlerts ?? auth.cameraAlerts,
-      eventNotifications: eventNotifications ?? auth.eventNotifications,
-      compactDashboard: compactDashboard ?? auth.compactDashboard,
-      saveActivityLocally: saveActivityLocally ?? auth.saveActivityLocally,
-    );
+  Future<void> _loadAiAlertSettings() async {
+    setState(() {
+      _isLoadingAiAlerts = true;
+      _aiAlertError = null;
+    });
 
-    if (!mounted) return;
+    try {
+      final settings = await _apiService.getAiAlertSettings();
+      if (!mounted) return;
 
-    setState(() => _isSaving = false);
+      setState(() {
+        _aiAlertsEnabled = settings['enabled'] == true;
+        _aiTimeoutController.text =
+            (settings['timeout_seconds'] ?? 10).toString();
+        _aiMaxWordsController.text = (settings['max_words'] ?? 10).toString();
+        _noFacePromptController.text =
+            settings['no_face_prompt']?.toString() ?? '';
+        _unknownFacePromptController.text =
+            settings['unknown_face_prompt']?.toString() ?? '';
+        _knownPersonPromptController.text =
+            settings['known_person_prompt']?.toString() ?? '';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _aiAlertError = error.toString().replaceAll('Exception: ', ''));
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingAiAlerts = false);
+      }
+    }
+  }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success
-              ? 'Setting updated.'
-              : auth.errorMessage ?? 'Failed to update setting.',
+  Future<void> _saveAiAlertSettings() async {
+    final timeoutSeconds =
+        double.tryParse(_aiTimeoutController.text.trim()) ?? 10;
+    final maxWords = int.tryParse(_aiMaxWordsController.text.trim()) ?? 10;
+
+    setState(() {
+      _isSavingAiAlerts = true;
+      _aiAlertError = null;
+    });
+
+    try {
+      final settings = await _apiService.updateAiAlertSettings(
+        enabled: _aiAlertsEnabled,
+        timeoutSeconds: timeoutSeconds.clamp(1, 30).toDouble(),
+        maxWords: maxWords.clamp(4, 20).toInt(),
+        noFacePrompt: _noFacePromptController.text.trim(),
+        unknownFacePrompt: _unknownFacePromptController.text.trim(),
+        knownPersonPrompt: _knownPersonPromptController.text.trim(),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _aiAlertsEnabled = settings['enabled'] == true;
+        _aiTimeoutController.text =
+            (settings['timeout_seconds'] ?? timeoutSeconds).toString();
+        _aiMaxWordsController.text = (settings['max_words'] ?? maxWords).toString();
+        _noFacePromptController.text =
+            settings['no_face_prompt']?.toString() ?? '';
+        _unknownFacePromptController.text =
+            settings['unknown_face_prompt']?.toString() ?? '';
+        _knownPersonPromptController.text =
+            settings['known_person_prompt']?.toString() ?? '';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('AI alert prompts saved.'),
+          behavior: SnackBarBehavior.floating,
         ),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final message = error.toString().replaceAll('Exception: ', '');
+      setState(() => _aiAlertError = message);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingAiAlerts = false);
+      }
+    }
+  }
+
+  Future<void> _loadDailyReportSettings() async {
+    setState(() {
+      _isLoadingDailyReport = true;
+      _dailyReportError = null;
+    });
+
+    try {
+      final settings = await _apiService.getDailyReportSettings();
+      if (!mounted) return;
+
+      setState(() {
+        _reportEmailController.text =
+            settings['report_email_to']?.toString() ?? '';
+        _reportTimeController.text =
+            settings['report_time']?.toString() ?? '23:00';
+        _reportTimezone = settings['timezone']?.toString() ?? 'Asia/Beirut';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() =>
+          _dailyReportError = error.toString().replaceAll('Exception: ', ''));
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingDailyReport = false);
+      }
+    }
+  }
+
+  Future<void> _saveDailyReportSettings() async {
+    final reportTime = _normalizeReportTime(_reportTimeController.text);
+    if (reportTime == null) {
+      setState(() => _dailyReportError = 'Enter report time as HH:mm.');
+      return;
+    }
+
+    setState(() {
+      _isSavingDailyReport = true;
+      _dailyReportError = null;
+    });
+
+    try {
+      final settings = await _apiService.updateDailyReportSettings(
+        reportEmailTo: _reportEmailController.text.trim(),
+        reportTime: reportTime,
+        timezone: _reportTimezone,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _reportEmailController.text =
+            settings['report_email_to']?.toString() ?? '';
+        _reportTimeController.text =
+            settings['report_time']?.toString() ?? reportTime;
+        _reportTimezone = settings['timezone']?.toString() ?? _reportTimezone;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Daily report settings saved.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final message = error.toString().replaceAll('Exception: ', '');
+      setState(() => _dailyReportError = message);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingDailyReport = false);
+      }
+    }
+  }
+
+  Future<void> _sendDailyReportEmail() async {
+    setState(() {
+      _isSendingDailyReport = true;
+      _dailyReportError = null;
+    });
+
+    try {
+      final result = await _apiService.sendDailyReportEmail();
+      if (!mounted) return;
+
+      final recipient = result['recipient']?.toString() ?? 'recipient';
+      final count = result['event_count']?.toString() ?? '0';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Report sent to $recipient with $count events.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final message = error.toString().replaceAll('Exception: ', '');
+      setState(() => _dailyReportError = message);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSendingDailyReport = false);
+      }
+    }
+  }
+
+  String? _normalizeReportTime(String value) {
+    final trimmed = value.trim();
+    final match = RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(trimmed);
+    if (match == null) return null;
+
+    final hour = int.tryParse(match.group(1)!);
+    final minute = int.tryParse(match.group(2)!);
+    if (hour == null || minute == null) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+
+    final paddedHour = hour.toString().padLeft(2, '0');
+    final paddedMinute = minute.toString().padLeft(2, '0');
+    return '$paddedHour:$paddedMinute';
   }
 
   Future<void> _logout() async {
@@ -162,11 +391,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _buildHeader(auth, userName),
                         const SizedBox(height: 18),
                         _buildAccountSection(auth),
-                        const SizedBox(height: 18),
-                        _buildPreferencesSection(auth),
-                        const SizedBox(height: 18),
-                        _buildSecuritySection(auth),
                         if (auth.isAdmin) ...[
+                          const SizedBox(height: 18),
+                          _buildDailyReportSection(),
+                          const SizedBox(height: 18),
+                          _buildAiAlertSection(),
                           const SizedBox(height: 18),
                           _buildAdminSection(),
                         ],
@@ -230,6 +459,110 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
+
+  Widget _buildAiAlertSection() {
+    return _GlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _PanelHeader(
+            icon: Icons.auto_awesome_rounded,
+            title: 'AI Alert Prompts',
+            subtitle: _isLoadingAiAlerts
+                ? 'Loading prompt settings from server'
+                : 'Gemini descriptions for critical camera alerts',
+            trailing: Switch.adaptive(
+              value: _aiAlertsEnabled,
+              activeThumbColor: _accent,
+              onChanged: _isSavingAiAlerts
+                  ? null
+                  : (value) => setState(() => _aiAlertsEnabled = value),
+            ),
+          ),
+          if (_aiAlertError != null) ...[
+            const SizedBox(height: 12),
+            _NoticeBox(
+              icon: Icons.error_outline_rounded,
+              title: 'AI settings unavailable',
+              message: _aiAlertError!,
+            ),
+          ],
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _PromptField(
+                  controller: _aiTimeoutController,
+                  label: 'Timeout seconds',
+                  icon: Icons.timer_outlined,
+                  keyboardType: TextInputType.number,
+                  enabled: !_isSavingAiAlerts,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _PromptField(
+                  controller: _aiMaxWordsController,
+                  label: 'Max words',
+                  icon: Icons.short_text_rounded,
+                  keyboardType: TextInputType.number,
+                  enabled: !_isSavingAiAlerts,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _PromptField(
+            controller: _noFacePromptController,
+            label: 'No visible face prompt',
+            icon: Icons.visibility_off_outlined,
+            hint: 'Example: mention if the person is near the door.',
+            enabled: !_isSavingAiAlerts,
+            maxLines: 2,
+          ),
+          const SizedBox(height: 10),
+          _PromptField(
+            controller: _unknownFacePromptController,
+            label: 'Unknown face prompt',
+            icon: Icons.person_search_rounded,
+            hint: 'Example: mention bags, laptops, or server racks.',
+            enabled: !_isSavingAiAlerts,
+            maxLines: 2,
+          ),
+          const SizedBox(height: 10),
+          _PromptField(
+            controller: _knownPersonPromptController,
+            label: 'Known person prompt',
+            icon: Icons.badge_outlined,
+            hint: 'Example: focus on what they are touching.',
+            enabled: !_isSavingAiAlerts,
+            maxLines: 2,
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _CommandButton(
+                label: _isSavingAiAlerts ? 'Saving' : 'Save AI Prompts',
+                icon: Icons.save_outlined,
+                color: _accent,
+                onPressed: _isSavingAiAlerts ? null : _saveAiAlertSettings,
+              ),
+              _CommandButton(
+                label: 'Reload',
+                icon: Icons.refresh_rounded,
+                color: _success,
+                onPressed:
+                    _isSavingAiAlerts || _isLoadingAiAlerts ? null : _loadAiAlertSettings,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAdminSection() {
     return _GlassPanel(
       child: Column(
@@ -324,84 +657,87 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildPreferencesSection(AuthProvider auth) {
-    return _GlassPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _PanelHeader(
-            icon: Icons.tune_rounded,
-            title: 'App Preferences',
-            subtitle: 'Settings saved through AuthProvider',
-          ),
-          const SizedBox(height: 14),
-          _SettingSwitchTile(
-            icon: Icons.notifications_active_outlined,
-            title: 'Critical Alerts',
-            subtitle: 'Show warnings for unauthorized or dangerous activity.',
-            value: auth.criticalAlerts,
-            color: _danger,
-            enabled: !_isSaving,
-            onChanged: (value) => _updateSettings(criticalAlerts: value),
-          ),
-          _SettingSwitchTile(
-            icon: Icons.videocam_outlined,
-            title: 'Camera Alerts',
-            subtitle: 'Enable camera-related notification preferences.',
-            value: auth.cameraAlerts,
-            color: _accent,
-            enabled: !_isSaving,
-            onChanged: (value) => _updateSettings(cameraAlerts: value),
-          ),
-          _SettingSwitchTile(
-            icon: Icons.history_rounded,
-            title: 'Event Notifications',
-            subtitle: 'Notify when new room events are detected.',
-            value: auth.eventNotifications,
-            color: _warning,
-            enabled: !_isSaving,
-            onChanged: (value) => _updateSettings(eventNotifications: value),
-          ),
-          _SettingSwitchTile(
-            icon: Icons.space_dashboard_outlined,
-            title: 'Compact Dashboard',
-            subtitle: 'Prepare a denser dashboard layout preference.',
-            value: auth.compactDashboard,
-            color: _success,
-            enabled: !_isSaving,
-            onChanged: (value) => _updateSettings(compactDashboard: value),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildDailyReportSection() {
+    final busy = _isLoadingDailyReport ||
+        _isSavingDailyReport ||
+        _isSendingDailyReport;
 
-  Widget _buildSecuritySection(AuthProvider auth) {
     return _GlassPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _PanelHeader(
-            icon: Icons.shield_rounded,
-            title: 'Security Preferences',
-            subtitle: 'Local preference controls for the security dashboard',
+          _PanelHeader(
+            icon: Icons.mark_email_read_outlined,
+            title: 'Daily Entry Report',
+            subtitle: _isLoadingDailyReport
+                ? 'Loading report settings from server'
+                : 'Gemini summary and raw event counts by email',
+          ),
+          if (_dailyReportError != null) ...[
+            const SizedBox(height: 12),
+            _NoticeBox(
+              icon: Icons.error_outline_rounded,
+              title: 'Report email unavailable',
+              message: _dailyReportError!,
+            ),
+          ],
+          const SizedBox(height: 14),
+          _PromptField(
+            controller: _reportEmailController,
+            label: 'Report email',
+            icon: Icons.alternate_email_rounded,
+            hint: 'admin@example.com',
+            keyboardType: TextInputType.emailAddress,
+            enabled: !busy,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _PromptField(
+                  controller: _reportTimeController,
+                  label: 'Report time',
+                  icon: Icons.schedule_rounded,
+                  hint: '23:00',
+                  keyboardType: TextInputType.datetime,
+                  enabled: !busy,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _InfoTile(
+                  icon: Icons.public_rounded,
+                  title: _reportTimezone,
+                  subtitle: 'Report timezone',
+                  color: _accent,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
-          _SettingSwitchTile(
-            icon: Icons.storage_rounded,
-            title: 'Save Activity Locally',
-            subtitle: 'Keep settings and session values on this device.',
-            value: auth.saveActivityLocally,
-            color: _success,
-            enabled: !_isSaving,
-            onChanged: (value) => _updateSettings(saveActivityLocally: value),
-          ),
-          const SizedBox(height: 12),
-          const _NoticeBox(
-            icon: Icons.cloud_sync_outlined,
-            title: 'Ready for backend sync',
-            message:
-                'The frontend is now organized through AuthProvider. When backend settings endpoints are added, only AuthProvider needs to call ApiService.',
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _CommandButton(
+                label: _isSavingDailyReport ? 'Saving' : 'Save Report',
+                icon: Icons.save_outlined,
+                color: _accent,
+                onPressed: busy ? null : _saveDailyReportSettings,
+              ),
+              _CommandButton(
+                label: _isSendingDailyReport ? 'Sending' : 'Send Today',
+                icon: Icons.send_rounded,
+                color: _success,
+                onPressed: busy ? null : _sendDailyReportEmail,
+              ),
+              _CommandButton(
+                label: 'Reload',
+                icon: Icons.refresh_rounded,
+                color: _warning,
+                onPressed: busy ? null : _loadDailyReportSettings,
+              ),
+            ],
           ),
         ],
       ),
@@ -655,69 +991,51 @@ class _InfoTile extends StatelessWidget {
   }
 }
 
-class _SettingSwitchTile extends StatelessWidget {
+class _PromptField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
   final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool value;
-  final Color color;
+  final String? hint;
+  final TextInputType? keyboardType;
   final bool enabled;
-  final ValueChanged<bool> onChanged;
+  final int maxLines;
 
-  const _SettingSwitchTile({
+  const _PromptField({
+    required this.controller,
+    required this.label,
     required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.color,
-    required this.onChanged,
+    this.hint,
+    this.keyboardType,
     this.enabled = true,
+    this.maxLines = 1,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.045),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Row(
-        children: [
-          _IconBubble(icon: icon, color: color, size: 40),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: Colors.white54,
-                    fontSize: 12,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Switch.adaptive(
-            value: value,
-            activeThumbColor: color,
-            onChanged: enabled ? onChanged : null,
-          ),
-        ],
+    return TextField(
+      controller: controller,
+      enabled: enabled,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon, color: _accent),
+        filled: true,
+        fillColor: Colors.white.withValues(alpha: 0.045),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Colors.white10),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Colors.white10),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: _accent.withValues(alpha: 0.75)),
+        ),
       ),
     );
   }

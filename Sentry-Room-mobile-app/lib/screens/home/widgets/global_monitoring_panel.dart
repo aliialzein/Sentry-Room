@@ -13,7 +13,6 @@ const _warning = HomeColors.warning;
 class GlobalMonitoringPanel extends StatelessWidget {
   const GlobalMonitoringPanel({
     super.key,
-    required this.notifyAllUsers,
     required this.isArmed,
     required this.modeLabel,
     required this.modeDescription,
@@ -21,14 +20,12 @@ class GlobalMonitoringPanel extends StatelessWidget {
     required this.modeIcon,
     required this.isSyncing,
     required this.isLocking,
-    required this.onNotifyAllUsersChanged,
     required this.onToggleArmed,
     required this.onLockRoom,
     required this.onSync,
     required this.onAlertSecurity,
   });
 
-  final bool notifyAllUsers;
   final bool isArmed;
   final String modeLabel;
   final String modeDescription;
@@ -36,7 +33,6 @@ class GlobalMonitoringPanel extends StatelessWidget {
   final IconData modeIcon;
   final bool isSyncing;
   final bool isLocking;
-  final ValueChanged<bool> onNotifyAllUsersChanged;
   final VoidCallback onToggleArmed;
   final VoidCallback onLockRoom;
   final VoidCallback onSync;
@@ -49,17 +45,9 @@ class GlobalMonitoringPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           PanelHeader(
-            icon: Icons.admin_panel_settings_rounded,
-            title: 'Global Monitoring',
-            subtitle: 'Security controls for the room perimeter',
-            trailing: Semantics(
-              label: 'Monitoring enabled toggle',
-              child: Switch.adaptive(
-                value: notifyAllUsers,
-                activeThumbColor: _accent,
-                onChanged: onNotifyAllUsersChanged,
-              ),
-            ),
+            icon: Icons.shield_rounded,
+            title: 'Security Mode',
+            subtitle: 'Operation controls for the room perimeter',
           ),
           const SizedBox(height: 18),
           ArmDisarmControl(

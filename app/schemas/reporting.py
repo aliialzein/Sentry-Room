@@ -31,3 +31,12 @@ class AnalyticsPdfReportData(BaseModel):
     trends: list[AnalyticsTrendPoint]
     recent_incidents: list[ReportIncidentSummary]
     ai_summary: AIReportResponse | None = None
+
+
+class DailyReportEmailResponse(BaseModel):
+    sent: bool
+    recipient: str
+    event_count: int
+    subject: str
+    generated_at: datetime
+    gemini_status: str

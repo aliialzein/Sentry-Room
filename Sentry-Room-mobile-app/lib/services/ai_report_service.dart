@@ -18,10 +18,6 @@ class AiReportService {
     required String range,
     required String? authToken,
   }) async {
-    if (authToken == null || authToken.isEmpty) {
-      throw Exception('Authentication token is required to load AI summaries.');
-    }
-
     final uri = Uri.parse('${ApiConstants.baseUrl}/api/ai-reports/summary')
         .replace(queryParameters: {'range': range});
     final response = await http

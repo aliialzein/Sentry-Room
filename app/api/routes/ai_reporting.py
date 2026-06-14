@@ -2,8 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
-from app.models.user import User
+from app.api.deps import get_db
 from app.schemas.ai_reporting import AIReportRange, AIReportResponse
 from app.services.ai_reporting import AIReportingService, AIRateLimitExceeded
 
@@ -14,13 +13,12 @@ router = APIRouter()
 def generate_ai_summary(
     report_range: AIReportRange = Query(default=AIReportRange.DAILY, alias="range"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> AIReportResponse:
     try:
         return AIReportingService().generate_summary(
             db=db,
             report_range=report_range,
-            user_id=current_user.id,
+            user_id=0,
         )
     except AIRateLimitExceeded as exc:
         raise HTTPException(

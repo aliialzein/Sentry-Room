@@ -164,6 +164,86 @@ class ApiService {
     throw Exception(_errorMessage(response, 'Failed to update security mode'));
   }
 
+  Future<Map<String, dynamic>> getAiAlertSettings() async {
+    final response = await http
+        .get(Uri.parse('$baseUrl/api/settings/ai-alerts'))
+        .timeout(_requestTimeout);
+    if (response.statusCode == 200) {
+      return json.decode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception(_errorMessage(response, 'Failed to load AI alert settings'));
+  }
+
+  Future<Map<String, dynamic>> updateAiAlertSettings({
+    required bool enabled,
+    required double timeoutSeconds,
+    required int maxWords,
+    required String noFacePrompt,
+    required String unknownFacePrompt,
+    required String knownPersonPrompt,
+  }) async {
+    final response = await http
+        .put(
+          Uri.parse('$baseUrl/api/settings/ai-alerts'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            'enabled': enabled,
+            'timeout_seconds': timeoutSeconds,
+            'max_words': maxWords,
+            'no_face_prompt': noFacePrompt,
+            'unknown_face_prompt': unknownFacePrompt,
+            'known_person_prompt': knownPersonPrompt,
+          }),
+        )
+        .timeout(_requestTimeout);
+    if (response.statusCode == 200) {
+      return json.decode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception(_errorMessage(response, 'Failed to update AI alert settings'));
+  }
+
+  Future<Map<String, dynamic>> getDailyReportSettings() async {
+    final response = await http
+        .get(Uri.parse('$baseUrl/api/settings/daily-report'))
+        .timeout(_requestTimeout);
+    if (response.statusCode == 200) {
+      return json.decode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception(_errorMessage(response, 'Failed to load daily report settings'));
+  }
+
+  Future<Map<String, dynamic>> updateDailyReportSettings({
+    required String reportEmailTo,
+    required String reportTime,
+    required String timezone,
+  }) async {
+    final response = await http
+        .put(
+          Uri.parse('$baseUrl/api/settings/daily-report'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            'report_email_to': reportEmailTo,
+            'report_time': reportTime,
+            'timezone': timezone,
+          }),
+        )
+        .timeout(_requestTimeout);
+    if (response.statusCode == 200) {
+      return json.decode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception(_errorMessage(response, 'Failed to update daily report settings'));
+  }
+
+  Future<Map<String, dynamic>> sendDailyReportEmail() async {
+    final response = await http
+        .post(Uri.parse('$baseUrl/api/reports/daily-email/send'))
+        .timeout(const Duration(seconds: 40));
+    if (response.statusCode == 200) {
+      return json.decode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception(_errorMessage(response, 'Failed to send daily report'));
+  }
+
   Future<List<Person>> getPersons() async {
     final response = await http
         .get(Uri.parse('$baseUrl/api/persons'))

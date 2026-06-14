@@ -13,6 +13,7 @@ from app.core.database import SessionLocal
 from app.models.enums import EventSeverity, EventType, SensorType
 from app.models.event import AccessEvent
 from app.models.sensor import SensorReading
+from app.services.fire_risk import fire_risk_service
 from app.services.websocket_manager import manager
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ SUBSCRIBED_TOPICS = [
     "security/sensors/dht",
     "security/sensors/light",
     "security/sensors/motion",
+    "security/sensors/fire-risk",
     "security/camera/event",
     "security/alerts",
     "security/alerts/description",
@@ -79,6 +81,18 @@ def _handle_motion(payload: dict) -> None:
         value={"triggered": bool(payload.get("triggered", True))},
         source="pi_pir",
     )
+
+
+def _handle_fire_risk(payload: dict) -> None:
+    db = SessionLocal()
+    try:
+        event = fire_risk_service.process_pi_trigger(db, payload)
+        db.commit()
+        db.refresh(event)
+        _broadcast(fire_risk_service.websocket_message(event))
+        logger.info("Created fire-risk event %s from Pi trigger", event.id)
+    finally:
+        db.close()
 
 
 def _handle_camera_event(payload: dict) -> None:
@@ -195,6 +209,7 @@ def _on_message(client, userdata, msg):
         "security/sensors/dht": _handle_dht,
         "security/sensors/light": _handle_light,
         "security/sensors/motion": _handle_motion,
+        "security/sensors/fire-risk": _handle_fire_risk,
         "security/camera/event": _handle_camera_event,
         "security/alerts": _handle_alert,
         "security/alerts/description": _handle_description,

@@ -60,6 +60,9 @@ class Settings:
     smtp_use_tls: bool = field(default_factory=lambda: _bool_env("SMTP_USE_TLS", True))
     openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    gemini_api_key: str | None = os.getenv("GEMINI_API_KEY")
+    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+    gemini_alert_timeout_seconds: float = float(os.getenv("GEMINI_ALERT_TIMEOUT_SECONDS", "10"))
 
     secret_key: str = os.getenv("SECRET_KEY", "change-this-secret")
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))

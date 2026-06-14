@@ -12,6 +12,7 @@ from app.services.detection import DetectionService
 from app.services.event_messages import websocket_event_message
 from app.services.face_duplicates import find_existing_face_match
 from app.services.face_index import face_index
+from app.services.gemini_alerts import gemini_alert_service
 from app.services.notification import NotificationService
 from app.services.storage import decode_base64_payload, save_bytes_file
 from app.services.websocket_manager import manager
@@ -22,6 +23,7 @@ router = APIRouter()
 @router.post("", response_model=EventRead, status_code=status.HTTP_201_CREATED)
 async def create_event(payload: EventCreate, db: Session = Depends(get_db)) -> AccessEvent:
     snapshot_path = payload.snapshot_path
+    snapshot_bytes: bytes | None = None
     if payload.snapshot_base64:
         try:
             snapshot_bytes = decode_base64_payload(payload.snapshot_base64)
@@ -50,6 +52,7 @@ async def create_event(payload: EventCreate, db: Session = Depends(get_db)) -> A
     db.flush()
 
     if event.severity in {EventSeverity.WARNING, EventSeverity.CRITICAL}:
+        gemini_alert_service.enrich_event_message(db, event, snapshot_bytes)
         NotificationService().create_pending_alerts(db, event)
 
     db.commit()

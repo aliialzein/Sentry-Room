@@ -5,6 +5,7 @@ from app.models.enums import EventSeverity, EventType
 from app.models.event import AccessEvent
 from app.models.person import Person
 from app.services.face_index import face_index
+from app.services.gemini_alerts import gemini_alert_service
 from app.services.notification import NotificationService
 from app.services.recognition import FaceRecognitionService, KnownFace
 from app.services.storage import save_bytes_file
@@ -37,6 +38,7 @@ class DetectionService:
             )
             db.add(event)
             db.flush()
+            gemini_alert_service.enrich_event_message(db, event, image_bytes)
             NotificationService().create_pending_alerts(db, event)
             return event
 
@@ -66,6 +68,7 @@ class DetectionService:
             db.add(event)
             db.flush()
             face_index.save_event_unknown_encodings(event.id, unknown_encodings)
+            gemini_alert_service.enrich_event_message(db, event, image_bytes)
             NotificationService().create_pending_alerts(db, event)
             return event
 

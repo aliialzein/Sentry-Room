@@ -14,6 +14,7 @@ from app.models.enums import EventSeverity, EventType, SecurityMode
 from app.models.event import AccessEvent
 from app.services.event_messages import websocket_event_message
 from app.services.face_index import face_index
+from app.services.gemini_alerts import gemini_alert_service
 from app.services.identity_detection import FaceIdentity, IdentityDetectionResult, IdentityDetectionService
 from app.services.notification import NotificationService
 from app.services.pi_camera_stream import pi_camera_stream
@@ -176,13 +177,16 @@ class PersonDetectionWorker:
             best_detection = max(detections, key=lambda detection: detection.confidence)
             identity_result = self._identity_result(db, frame)
             decision = self._event_decision(mode, best_detection, identity_result)
-            active_event = self._active_event(db, decision.event_key)
+            active_event = self._active_event(db, decision)
             now = datetime.now(timezone.utc)
 
             if active_event is not None:
                 self._touch_active_event(
+                    db=db,
                     event=active_event,
                     now=now,
+                    decision=decision,
+                    frame=frame,
                     detections=detections,
                     visible_seconds=visible_seconds,
                     identity_result=identity_result,
@@ -221,6 +225,7 @@ class PersonDetectionWorker:
                 face_index.save_event_unknown_encodings(event.id, identity_result.unknown_encodings)
 
             if event.severity != EventSeverity.INFO:
+                gemini_alert_service.enrich_event_message(db, event, frame)
                 NotificationService().create_pending_alerts(db, event)
 
             db.commit()
@@ -320,7 +325,7 @@ class PersonDetectionWorker:
             identity=identity,
         )
 
-    def _active_event(self, db, event_key: str) -> AccessEvent | None:
+    def _active_event(self, db, decision: EventDecision) -> AccessEvent | None:
         statement = (
             select(AccessEvent)
             .where(AccessEvent.ended_at.is_(None))
@@ -328,26 +333,53 @@ class PersonDetectionWorker:
             .limit(100)
         )
 
+        uncertain_match: AccessEvent | None = None
         for event in db.scalars(statement):
             payload = event.sensor_payload or {}
-            if payload.get("source") == "person_detection_worker" and payload.get("event_key") == event_key:
+            if payload.get("source") != "person_detection_worker":
+                continue
+            if payload.get("security_mode") != _mode_from_event_key(decision.event_key):
+                continue
+
+            active_identity_key = str(payload.get("identity_key") or "")
+            if active_identity_key == decision.identity_key:
                 return event
+
+            if _is_uncertain_identity(active_identity_key):
+                uncertain_match = event
+
+            if _is_uncertain_identity(decision.identity_key):
+                return event
+
+        if _is_known_identity(decision.identity_key):
+            return uncertain_match
         return None
 
     def _touch_active_event(
         self,
+        db,
         event: AccessEvent,
         now: datetime,
+        decision: EventDecision,
+        frame: bytes,
         detections: list[PersonDetection],
         visible_seconds: float,
         identity_result: IdentityDetectionResult | None,
         identity_error: str | None,
     ) -> None:
         payload = event.sensor_payload or {}
+        active_identity_key = str(payload.get("identity_key") or "")
+        upgraded_identity = _identity_rank(decision.identity_key) > _identity_rank(active_identity_key)
+        preserve_identity_fields = _identity_rank(active_identity_key) > _identity_rank(decision.identity_key)
+        previous_identity_payload = {
+            key: payload[key]
+            for key in ("detected_face_count", "unknown_face_count", "identities", "identity_error")
+            if key in payload
+        }
         payload.update(
             self._event_payload(
-                event_key=str(payload.get("event_key") or ""),
-                identity_key=str(payload.get("identity_key") or ""),
+                event_key=decision.event_key if upgraded_identity else str(payload.get("event_key") or decision.event_key),
+                identity_key=decision.identity_key if upgraded_identity else str(payload.get("identity_key") or decision.identity_key),
                 mode=_security_mode_from_value(payload.get("security_mode")),
                 detections=detections,
                 visible_seconds=visible_seconds,
@@ -356,10 +388,25 @@ class PersonDetectionWorker:
                 seen_count=int(payload.get("seen_count", 1)) + 1,
             )
         )
+        if preserve_identity_fields:
+            for key in ("detected_face_count", "unknown_face_count", "identities", "identity_error"):
+                payload.pop(key, None)
+            payload.update(previous_identity_payload)
         payload["last_seen_at"] = now.isoformat()
         event.last_seen_at = now
         event.sensor_payload = payload
         flag_modified(event, "sensor_payload")
+
+        if upgraded_identity:
+            event.event_type = decision.event_type
+            event.severity = decision.severity
+            event.person_id = decision.person_id
+            event.confidence = decision.confidence
+            event.message = decision.message
+            if identity_result is not None and identity_result.unknown_encodings:
+                face_index.save_event_unknown_encodings(event.id, identity_result.unknown_encodings)
+            if event.severity != EventSeverity.INFO:
+                gemini_alert_service.enrich_event_message(db, event, frame)
 
     def _close_stale_incidents(self) -> None:
         settings = get_settings()
@@ -510,6 +557,27 @@ def _security_mode_from_value(value: object) -> SecurityMode:
         return SecurityMode(raw_value)
     except ValueError:
         return SecurityMode.WORKING_HOURS
+
+
+def _mode_from_event_key(event_key: str) -> str:
+    parts = event_key.split(":")
+    return parts[1] if len(parts) >= 2 else SecurityMode.WORKING_HOURS.value
+
+
+def _is_uncertain_identity(identity_key: str) -> bool:
+    return identity_key in {"no_face", "unknown_face", ""}
+
+
+def _is_known_identity(identity_key: str) -> bool:
+    return identity_key.startswith("person_")
+
+
+def _identity_rank(identity_key: str) -> int:
+    if _is_known_identity(identity_key):
+        return 2
+    if identity_key == "unknown_face":
+        return 1
+    return 0
 
 
 person_detection_worker = PersonDetectionWorker()

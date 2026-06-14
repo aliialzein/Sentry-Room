@@ -62,10 +62,25 @@ class EventsScreen extends StatelessWidget {
                               : FontWeight.bold,
                         ),
                       ),
-                      subtitle: Text(
-                        DateFormat('MMM dd, yyyy - HH:mm:ss')
-                            .format(event.createdAt),
-                        style: const TextStyle(fontSize: 12),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            _buildIdentityBadge(
+                              event.displayTypeLabel,
+                              event.identityCategory,
+                              event.severity,
+                            ),
+                            Text(
+                              DateFormat('MMM dd, yyyy - HH:mm:ss')
+                                  .format(event.createdAt),
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ],
+                        ),
                       ),
                       children: [
                         Padding(
@@ -73,6 +88,8 @@ class EventsScreen extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              _buildDetailRow(
+                                  'Identity', event.displayTypeLabel),
                               _buildDetailRow('Type', event.eventType),
                               _buildDetailRow('Severity', event.severity),
                               if (event.lastSeenAt != null ||
@@ -129,6 +146,37 @@ class EventsScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildIdentityBadge(
+    String label,
+    String category,
+    String severity,
+  ) {
+    final color = _getIdentityColor(category, severity);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_getIdentityIcon(category), size: 14, color: color),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSnapshotPreview(String snapshotPath) {
     return Padding(
       padding: const EdgeInsets.only(top: 12),
@@ -174,5 +222,56 @@ class EventsScreen extends StatelessWidget {
       backgroundColor: color.withValues(alpha: 0.1),
       child: Icon(iconData, color: color, size: 20),
     );
+  }
+
+  Color _getIdentityColor(String category, String severity) {
+    switch (category) {
+      case 'authorized_person':
+        return Colors.green;
+      case 'no_face':
+        return Colors.orange;
+      case 'unknown_face':
+        return Colors.deepOrange;
+      case 'fire_warning':
+        return Colors.orange;
+      case 'fire_emergency':
+        return Colors.red;
+      case 'unauthorized_person':
+      case 'unauthorized_entry':
+        return Colors.red;
+      default:
+        return _severityColor(severity);
+    }
+  }
+
+  IconData _getIdentityIcon(String category) {
+    switch (category) {
+      case 'authorized_person':
+        return Icons.verified_user_outlined;
+      case 'no_face':
+        return Icons.visibility_off_outlined;
+      case 'unknown_face':
+        return Icons.person_search_outlined;
+      case 'fire_warning':
+        return Icons.local_fire_department_outlined;
+      case 'fire_emergency':
+        return Icons.local_fire_department_rounded;
+      case 'unauthorized_person':
+      case 'unauthorized_entry':
+        return Icons.gpp_maybe_outlined;
+      default:
+        return Icons.info_outline;
+    }
+  }
+
+  Color _severityColor(String severity) {
+    switch (severity.toLowerCase()) {
+      case 'critical':
+        return Colors.red;
+      case 'warning':
+        return Colors.orange;
+      default:
+        return Colors.blue;
+    }
   }
 }

@@ -5,7 +5,18 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.models.enums import SecurityMode
 from app.models.system import SystemSetting
-from app.schemas.system import SecurityModeRead, SecurityModeUpdate, SystemSettingRead, SystemSettingUpsert
+from app.schemas.system import (
+    AiAlertSettingsRead,
+    AiAlertSettingsUpdate,
+    DailyReportSettingsRead,
+    DailyReportSettingsUpdate,
+    SecurityModeRead,
+    SecurityModeUpdate,
+    SystemSettingRead,
+    SystemSettingUpsert,
+)
+from app.services.daily_report_email import DailyReportEmailService
+from app.services.gemini_alerts import get_ai_alert_settings, save_ai_alert_settings
 
 
 router = APIRouter()
@@ -50,6 +61,26 @@ def update_security_mode(payload: SecurityModeUpdate, db: Session = Depends(get_
 
     db.commit()
     return SecurityModeRead(mode=payload.mode, description=description)
+
+
+@router.get("/ai-alerts", response_model=AiAlertSettingsRead)
+def get_ai_alerts(db: Session = Depends(get_db)) -> dict:
+    return get_ai_alert_settings(db)
+
+
+@router.put("/ai-alerts", response_model=AiAlertSettingsRead, status_code=status.HTTP_200_OK)
+def update_ai_alerts(payload: AiAlertSettingsUpdate, db: Session = Depends(get_db)) -> dict:
+    return save_ai_alert_settings(db, payload.model_dump())
+
+
+@router.get("/daily-report", response_model=DailyReportSettingsRead)
+def get_daily_report_settings(db: Session = Depends(get_db)) -> dict:
+    return DailyReportEmailService().get_settings(db)
+
+
+@router.put("/daily-report", response_model=DailyReportSettingsRead, status_code=status.HTTP_200_OK)
+def update_daily_report_settings(payload: DailyReportSettingsUpdate, db: Session = Depends(get_db)) -> dict:
+    return DailyReportEmailService().save_settings(db, payload.model_dump())
 
 
 @router.put("/{key}", response_model=SystemSettingRead, status_code=status.HTTP_200_OK)

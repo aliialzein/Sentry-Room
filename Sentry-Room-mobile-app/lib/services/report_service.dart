@@ -31,14 +31,10 @@ class ReportService {
     required String range,
     required String? authToken,
   }) async {
-    if (authToken == null || authToken.isEmpty) {
-      throw Exception('Authentication token is required to generate reports.');
-    }
-
     final uri = Uri.parse('${ApiConstants.baseUrl}/api/reports/pdf').replace(
       queryParameters: {'range': range},
     );
-    final headers = _apiService.buildJsonHeaders(accessToken: authToken)
+    final headers = _apiService.buildJsonHeaders()
       ..['accept'] = 'application/pdf';
 
     final response = await http

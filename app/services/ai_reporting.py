@@ -3,11 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
-from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -55,11 +55,9 @@ class AIReportingService:
         self,
         analytics_service: AnalyticsService | None = None,
         settings: Settings | None = None,
-        client: Any | None = None,
     ) -> None:
         self._analytics_service = analytics_service or AnalyticsService()
         self._settings = settings or get_settings()
-        self._client = client
 
     def generate_summary(
         self,
@@ -76,16 +74,16 @@ class AIReportingService:
         if cached and cached.expires_at > now:
             return cached.response
 
-        if not self._settings.openai_api_key:
+        if not self._settings.gemini_api_key:
             return self._fallback_response(
                 report_range=report_range,
                 reason="AI summary unavailable.",
             )
 
         try:
-            content = self._request_openai_summary(payload)
+            content = self._request_gemini_summary(payload)
             response = self.parse_ai_response(content, report_range=report_range)
-        except (APIConnectionError, APIStatusError, APITimeoutError, TimeoutError, ValueError, json.JSONDecodeError):
+        except (TimeoutError, OSError, urllib.error.URLError, urllib.error.HTTPError, ValueError, json.JSONDecodeError, KeyError):
             return self._fallback_response(
                 report_range=report_range,
                 reason="AI summary unavailable.",
@@ -162,40 +160,49 @@ class AIReportingService:
         except Exception:
             return self._fallback_response(report_range=report_range, reason="AI summary unavailable.")
 
-    def _request_openai_summary(self, payload: AIAnalyticsPayload) -> str:
-        client = self._client or OpenAI(api_key=self._settings.openai_api_key, timeout=20)
-        response = client.responses.create(
-            model=self._settings.openai_model,
-            instructions=SYSTEM_PROMPT,
-            input=self.build_prompt(payload),
-            text={
-                "format": {
-                    "type": "json_schema",
-                    "name": "sentry_room_ai_summary",
-                    "strict": True,
-                    "schema": {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "summary": {"type": "string"},
-                            "keyFindings": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                            },
-                            "recommendations": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                            },
-                        },
-                        "required": ["summary", "keyFindings", "recommendations"],
-                    },
-                }
-            },
+    def _request_gemini_summary(self, payload: AIAnalyticsPayload) -> str:
+        if not self._settings.gemini_api_key:
+            raise ValueError("GEMINI_API_KEY is not set.")
+
+        endpoint = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{self._settings.gemini_model}:generateContent"
         )
-        output_text = getattr(response, "output_text", None)
-        if not output_text:
-            raise ValueError("AI response did not include output text.")
-        return output_text
+        prompt = (
+            f"{SYSTEM_PROMPT}\n\n"
+            "Return valid JSON only, with exactly these keys: "
+            "summary, keyFindings, recommendations.\n"
+            "keyFindings and recommendations must be arrays of strings.\n\n"
+            f"{self.build_prompt(payload)}"
+        )
+        request_payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt},
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": 700,
+                "responseMimeType": "application/json",
+            },
+        }
+        request = urllib.request.Request(
+            endpoint,
+            data=json.dumps(request_payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": self._settings.gemini_api_key,
+            },
+            method="POST",
+        )
+
+        with urllib.request.urlopen(request, timeout=20) as response:
+            decoded = json.loads(response.read().decode("utf-8"))
+
+        return str(decoded["candidates"][0]["content"]["parts"][0]["text"])
 
     def _fallback_response(self, report_range: AnalyticsRange, reason: str) -> AIReportResponse:
         return AIReportResponse(
@@ -228,7 +235,7 @@ class AIReportingService:
             result[label] = item.count
         return result
 
-    def _string_list(self, value: Any) -> list[str]:
+    def _string_list(self, value: object) -> list[str]:
         if not isinstance(value, list):
             return []
         return [str(item).strip() for item in value if str(item).strip()]

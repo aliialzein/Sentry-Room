@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../providers/auth_provider.dart';
 import 'models/emergency_incident_log.dart';
 import 'providers/emergency_incident_log_provider.dart';
 import 'utils/emergency_report_builder.dart';
@@ -350,19 +349,6 @@ class EmergencyHistoryScreen extends StatelessWidget {
     BuildContext context,
     EmergencyIncidentLogProvider provider,
   ) async {
-    final authProvider = context.read<AuthProvider>();
-    if (!authProvider.isAuthenticated || authProvider.token == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Sign in to sync emergency incident history to the backend.'),
-          backgroundColor: HomeColors.danger,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-
     final pendingCount = provider.logs.where((log) => !log.isSynced).length;
     if (pendingCount == 0) {
       return;
@@ -375,8 +361,7 @@ class EmergencyHistoryScreen extends StatelessWidget {
     );
 
     try {
-      final syncedCount =
-          await provider.syncPendingIncidents(authToken: authProvider.token);
+      final syncedCount = await provider.syncPendingIncidents();
       if (!context.mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
